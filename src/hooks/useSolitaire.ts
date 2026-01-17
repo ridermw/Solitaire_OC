@@ -29,39 +29,60 @@ export const useSolitaire = () => {
 
   const startNewGame = async (overrideDrawCount?: 1 | 3) => {
     // Reset state to empty before generating to ensure clean animation start
-    setGameState(INITIAL_GAME_STATE);
+    // Create a completely fresh empty state object
+    setGameState({
+        stock: [], 
+        waste: [], 
+        foundations: { 
+            hearts: [], 
+            diamonds: [], 
+            clubs: [], 
+            spades: [] 
+        }, 
+        tableau: [[],[],[],[],[],[],[]],
+        score: 0
+    });
     
+    // Clear selection immediately to prevent ghost selections
+    setSelectedCard(null);
+
+    // Force a small delay to ensure React commits the empty state to the DOM
+    // before we start the heavy generation process.
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     setIsGenerating(true);
     setIsDealing(true); // Start deal animation flag
     const count = overrideDrawCount ?? drawCount;
 
-    // Use setTimeout to allow UI to render loading state if needed
-    setTimeout(() => {
-        let attempts = 0;
-        let winnableGame: GameState | null = null;
+    const searchForWinnableGame = () => {
+        const BATCH_SIZE = 10;
+        let foundGame: GameState | null = null;
         
-        while (attempts < 20 && !winnableGame) { 
+        // Try a batch of deals
+        for (let i = 0; i < BATCH_SIZE; i++) {
             const candidate = dealNewGame();
-            if (isGameWinnable(candidate, count)) { // Pass draw count to solver
-                winnableGame = candidate;
+            if (isGameWinnable(candidate, count)) {
+                foundGame = candidate;
+                break;
             }
-            attempts++;
         }
 
-        // Fallback
-        if (!winnableGame) {
-             console.warn("Could not find provably winnable game in attempts, dealing random.");
-             winnableGame = dealNewGame();
+        if (foundGame) {
+            setGameState(foundGame);
+            setSelectedCard(null);
+            setIsGenerating(false);
+            
+            // End dealing animation after a short delay (simulating card distribution visual time)
+            // In a real physics animation we would wait for callbacks, but here we just use state for now
+            setTimeout(() => setIsDealing(false), 1000); 
+        } else {
+            // Keep looking in next tick
+            setTimeout(searchForWinnableGame, 0);
         }
+    };
 
-        setGameState(winnableGame);
-        setSelectedCard(null);
-        setIsGenerating(false);
-        
-        // End dealing animation after a short delay (simulating card distribution visual time)
-        // In a real physics animation we would wait for callbacks, but here we just use state for now
-        setTimeout(() => setIsDealing(false), 1000); 
-    }, 10);
+    // Start search after initial UI clear delay
+    setTimeout(searchForWinnableGame, 100);
   };
 
   useEffect(() => {

@@ -1,197 +1,300 @@
-// Solitaire is notoriously hard to prove solvable efficiently (it's NP-complete).
-// However, most "winnable" deal generators simply play the game out with a solver.
-// Since a full solver is complex, we will implement a basic heuristic check or
-// potentially just ensure we don't deal obviously impossible states if we can detect them easily.
-//
-// But a more robust approach (often used in casual games) is to try to solve it.
-//
-// For this iteration, let's implement a 'Solvability Checker' that attempts to play the game automatically.
-// If it gets stuck, we assume it *might* be unsolvable (though our solver might just be bad).
-//
-// To guarantee a winnable game, we can use the "Deal backwards" or "Pre-solved" approach,
-// but that creates very specific distributions.
-//
-// Instead, let's just generate random deals and run a quick solver on them. If the solver wins, it's 100% winnable.
-// If not, we discard and retry (up to a limit).
+// Klondike Solitaire Solver using DFS with state tracking
+// This is a proper solver that exhaustively searches for a winning sequence of moves
 
-import type { Card, GameState } from '../types/game';
+import type { Card, GameState, Suit } from '../types/game';
 import { getRankValue, isOppositeColor } from './cardUtils';
+
+// Move types for the solver
+type MoveKind =
+  | 'draw_stock'
+  | 'recycle_waste'
+  | 'waste_to_foundation'
+  | 'waste_to_tableau'
+  | 'tableau_to_foundation'
+  | 'tableau_to_tableau'
+  | 'flip_tableau';
+
+interface Move {
+  kind: MoveKind;
+  src?: number;  // Source tableau index
+  dst?: number;  // Destination tableau index
+  suit?: Suit;   // For foundation moves
+  runStartIndex?: number; // For tableau runs
+}
 
 // Helper to deep clone state for simulation
 const cloneState = (state: GameState): GameState => {
     return {
-        stock: [...state.stock],
-        waste: [...state.waste],
+        stock: state.stock.map(c => ({ ...c })),
+        waste: state.waste.map(c => ({ ...c })),
         foundations: {
-            hearts: [...state.foundations.hearts],
-            diamonds: [...state.foundations.diamonds],
-            clubs: [...state.foundations.clubs],
-            spades: [...state.foundations.spades],
+            hearts: state.foundations.hearts.map(c => ({ ...c })),
+            diamonds: state.foundations.diamonds.map(c => ({ ...c })),
+            clubs: state.foundations.clubs.map(c => ({ ...c })),
+            spades: state.foundations.spades.map(c => ({ ...c })),
         },
-        tableau: state.tableau.map(pile => [...pile]),
+        tableau: state.tableau.map(pile => pile.map(c => ({ ...c }))),
         score: state.score
     };
 };
 
-const getTopCard = (pile: Card[]): Card | null => pile.length > 0 ? pile[pile.length - 1] : null;
+// Generate a unique key for state to detect cycles
+const getStateKey = (state: GameState): string => {
+    const parts: string[] = [];
+    
+    // Stock and waste
+    parts.push(`S:${state.stock.map(c => c.id).join(',')}`);
+    parts.push(`W:${state.waste.map(c => c.id).join(',')}`);
+    
+    // Foundations
+    const foundationKeys = ['hearts', 'diamonds', 'clubs', 'spades'].map(suit => 
+        state.foundations[suit as Suit].map(c => c.id).join(',')
+    );
+    parts.push(`F:${foundationKeys.join('|')}`);
+    
+    // Tableau (including face-up/down state)
+    const tableauKeys = state.tableau.map(pile => 
+        pile.map(c => `${c.id}:${c.isFaceUp ? '1' : '0'}`).join(',')
+    );
+    parts.push(`T:${tableauKeys.join('|')}`);
+    
+    return parts.join('||');
+};
 
-export const isGameWinnable = (initialState: GameState, drawCount: 1 | 3 = 1, maxMoves = 1000): boolean => {
-    // A simplified greedy solver
-    const state = cloneState(initialState);
-    let movesWithoutProgress = 0;
-    const history = new Set<string>();
+// Check if game is won
+const isWin = (state: GameState): boolean => {
+    return Object.values(state.foundations).reduce((sum, pile) => sum + pile.length, 0) === 52;
+};
 
-    // Helper to serialize state to detect cycles (simplified)
-    const getStateSignature = (s: GameState) => {
-        // We only care about the top cards and stock/waste counts roughly
-        // This is a hash.
-        return JSON.stringify({
-            f: Object.values(s.foundations).map(p => p.length),
-            t: s.tableau.map(p => p.map(c => c.isFaceUp ? c.id : 'X')),
-            s: s.stock.length,
-            w: s.waste.length > 0 ? s.waste[s.waste.length - 1].id : null,
-            wc: s.waste.length // Include waste count for better accuracy
-        });
-    };
-
-    for (let move = 0; move < maxMoves; move++) {
-        let moved = false;
-        
-        // 1. Try to move to foundation (Always good?)
-        // Check waste
-        const wasteCard = getTopCard(state.waste);
-        if (wasteCard) {
-            if (canMoveToFoundation(wasteCard, state)) {
-                moveCardToFoundation(wasteCard, state, 'waste');
-                moved = true;
-            }
-        }
-        // Check tableau tips
-        if (!moved) {
-            for (let i = 0; i < 7; i++) {
-                const card = getTopCard(state.tableau[i]);
-                if (card && canMoveToFoundation(card, state)) {
-                     moveCardToFoundation(card, state, 'tableau', i);
-                     moved = true;
-                     break;
-                }
-            }
-        }
-
-        // 2. Try to improve tableau (reveal face down cards or move Kings)
-        if (!moved) {
-             // Look for moves between tableau piles
-             for (let i = 0; i < 7; i++) {
-                 // Source pile
-                 if (state.tableau[i].length === 0) continue;
-                 
-                 // Try moving the whole stack starting from the first face up card
-                 // Optimization: Don't move a King from an empty pile to another empty pile
-                 
-                 // Find first face up card
-                 const pile = state.tableau[i];
-                 const firstFaceUpIdx = pile.findIndex(c => c.isFaceUp);
-                 if (firstFaceUpIdx === -1) continue; // Should not happen
-
-                 const cardToMove = pile[firstFaceUpIdx];
-                 
-                 // Don't move King if it's already at bottom (index 0) of a pile
-                 if (cardToMove.rank === 'K' && firstFaceUpIdx === 0) continue;
-
-                 // Try to find a target
-                 for (let j = 0; j < 7; j++) {
-                     if (i === j) continue;
-                     
-                     if (canMoveToTableau(cardToMove, state.tableau[j])) {
-                         // Execute move
-                         const movingCards = pile.slice(firstFaceUpIdx);
-                         state.tableau[i] = pile.slice(0, firstFaceUpIdx);
-                         if (state.tableau[i].length > 0) {
-                             state.tableau[i][state.tableau[i].length - 1].isFaceUp = true;
-                         }
-                         state.tableau[j] = [...state.tableau[j], ...movingCards];
-                         moved = true;
-                         break;
-                     }
-                 }
-                 if (moved) break;
-             }
-        }
-        
-        // 3. Draw from stock
-        if (!moved) {
-            if (state.stock.length > 0) {
-                // Draw logic with drawCount
-                const count = Math.min(drawCount, state.stock.length);
-                for (let i = 0; i < count; i++) {
-                    const card = state.stock.pop()!;
-                    card.isFaceUp = true;
-                    state.waste.push(card);
-                }
-                moved = true;
-            } else if (state.waste.length > 0) {
-                // Recycle (only if we haven't just done this without progress)
-                // In this simple solver, recycling is tricky. 
-                // We'll limit recycling: if we cycled through the whole deck without moves, we're stuck.
-                // For simplicity, let's treat recycling as a move but track cycles.
-                
-                // If we are just recycling endlessly, we lose.
-                // Let's assume the loop 'maxMoves' covers this naturally if we don't make other progress.
-                const newStock = state.waste.reverse().map(c => ({...c, isFaceUp: false}));
-                state.stock = newStock;
-                state.waste = [];
-                moved = true;
-            }
-        }
-
-        if (moved) {
-             // Check win condition
-             const totalFoundation = Object.values(state.foundations).reduce((acc, p) => acc + p.length, 0);
-             if (totalFoundation === 52) return true;
-             
-             // Check cycle
-             const sig = getStateSignature(state);
-             if (history.has(sig)) {
-                 // Loop detected
-                 return false; 
-             }
-             history.add(sig);
-             movesWithoutProgress = 0;
-        } else {
-            movesWithoutProgress++;
-            if (movesWithoutProgress > 1) return false; // Stuck
+// Get all legal moves from current state
+function* getLegalMoves(state: GameState, _drawCount: 1 | 3, stockPassesUsed: number, maxStockPasses: number): Iterable<Move> {
+    // Draw from stock
+    if (state.stock.length > 0) {
+        yield { kind: 'draw_stock' };
+    }
+    
+    // Recycle waste to stock (with pass limit)
+    if (state.stock.length === 0 && state.waste.length > 0 && stockPassesUsed < maxStockPasses) {
+        yield { kind: 'recycle_waste' };
+    }
+    
+    // Flip face-down tableau cards
+    for (let i = 0; i < 7; i++) {
+        const pile = state.tableau[i];
+        if (pile.length > 0 && !pile[pile.length - 1].isFaceUp) {
+            yield { kind: 'flip_tableau', src: i };
         }
     }
+    
+    // Waste to foundation
+    if (state.waste.length > 0) {
+        const wasteTop = state.waste[state.waste.length - 1];
+        if (canMoveToFoundation(wasteTop, state.foundations[wasteTop.suit])) {
+            yield { kind: 'waste_to_foundation', suit: wasteTop.suit };
+        }
+    }
+    
+    // Waste to tableau
+    if (state.waste.length > 0) {
+        const wasteTop = state.waste[state.waste.length - 1];
+        for (let dst = 0; dst < 7; dst++) {
+            if (canMoveToTableau(wasteTop, state.tableau[dst])) {
+                yield { kind: 'waste_to_tableau', dst };
+            }
+        }
+    }
+    
+    // Tableau to foundation
+    for (let src = 0; src < 7; src++) {
+        const pile = state.tableau[src];
+        if (pile.length > 0 && pile[pile.length - 1].isFaceUp) {
+            const top = pile[pile.length - 1];
+            if (canMoveToFoundation(top, state.foundations[top.suit])) {
+                yield { kind: 'tableau_to_foundation', src, suit: top.suit };
+            }
+        }
+    }
+    
+    // Tableau to tableau (with runs)
+    for (let src = 0; src < 7; src++) {
+        const srcPile = state.tableau[src];
+        if (srcPile.length === 0) continue;
+        
+        // Find first face-up card
+        const firstFaceUpIdx = srcPile.findIndex(c => c.isFaceUp);
+        if (firstFaceUpIdx === -1) continue;
+        
+        // Try moving runs starting from each face-up card
+        for (let startIdx = firstFaceUpIdx; startIdx < srcPile.length; startIdx++) {
+            if (!isValidRun(srcPile, startIdx)) continue;
+            
+            const movingCard = srcPile[startIdx];
+            for (let dst = 0; dst < 7; dst++) {
+                if (dst === src) continue;
+                if (canMoveToTableau(movingCard, state.tableau[dst])) {
+                    yield { kind: 'tableau_to_tableau', src, dst, runStartIndex: startIdx };
+                }
+            }
+        }
+    }
+}
 
+// Check if cards form a valid descending run with alternating colors
+const isValidRun = (pile: Card[], startIndex: number): boolean => {
+    for (let i = startIndex; i < pile.length - 1; i++) {
+        const current = pile[i];
+        const next = pile[i + 1];
+        if (!isOppositeColor(current, next)) return false;
+        if (getRankValue(current.rank) !== getRankValue(next.rank) + 1) return false;
+    }
+    return true;
+};
+
+// Apply a move to the state (mutates state)
+const applyMove = (state: GameState, move: Move, drawCount: 1 | 3): number => {
+    let newStockPasses = 0;
+    
+    switch (move.kind) {
+        case 'draw_stock': {
+            const count = Math.min(drawCount, state.stock.length);
+            for (let i = 0; i < count; i++) {
+                const card = state.stock.pop()!;
+                card.isFaceUp = true;
+                state.waste.push(card);
+            }
+            break;
+        }
+        
+        case 'recycle_waste': {
+            state.stock = state.waste.reverse().map(c => ({ ...c, isFaceUp: false }));
+            state.waste = [];
+            newStockPasses = 1;
+            break;
+        }
+        
+        case 'flip_tableau': {
+            const pile = state.tableau[move.src!];
+            if (pile.length > 0) {
+                pile[pile.length - 1].isFaceUp = true;
+            }
+            break;
+        }
+        
+        case 'waste_to_foundation': {
+            const card = state.waste.pop()!;
+            state.foundations[move.suit!].push(card);
+            break;
+        }
+        
+        case 'waste_to_tableau': {
+            const card = state.waste.pop()!;
+            state.tableau[move.dst!].push(card);
+            break;
+        }
+        
+        case 'tableau_to_foundation': {
+            const card = state.tableau[move.src!].pop()!;
+            state.foundations[move.suit!].push(card);
+            // Flip next card if exists
+            const pile = state.tableau[move.src!];
+            if (pile.length > 0 && !pile[pile.length - 1].isFaceUp) {
+                pile[pile.length - 1].isFaceUp = true;
+            }
+            break;
+        }
+        
+        case 'tableau_to_tableau': {
+            const srcPile = state.tableau[move.src!];
+            const movingCards = srcPile.splice(move.runStartIndex!);
+            state.tableau[move.dst!].push(...movingCards);
+            // Flip next card if exists
+            if (srcPile.length > 0 && !srcPile[srcPile.length - 1].isFaceUp) {
+                srcPile[srcPile.length - 1].isFaceUp = true;
+            }
+            break;
+        }
+    }
+    
+    return newStockPasses;
+};
+
+// Score moves for prioritization (higher = better)
+const scoreMove = (move: Move): number => {
+    switch (move.kind) {
+        case 'waste_to_foundation': return 100;
+        case 'tableau_to_foundation': return 90;
+        case 'flip_tableau': return 80;
+        case 'tableau_to_tableau': return 50;
+        case 'waste_to_tableau': return 40;
+        case 'draw_stock': return 10;
+        case 'recycle_waste': return 0;
+        default: return 0;
+    }
+};
+
+// Iterative DFS solver with explicit stack to avoid call stack overflow
+const dfs = (
+    initialState: GameState,
+    drawCount: 1 | 3,
+    maxStockPasses: number,
+    maxNodes: number,
+    deadline: number
+): boolean => {
+    const visited = new Set<string>();
+    
+    // Stack entries: [state, stockPassesUsed]
+    const stack: Array<[GameState, number]> = [[initialState, 0]];
+    let nodesExplored = 0;
+    
+    while (stack.length > 0 && nodesExplored < maxNodes && Date.now() < deadline) {
+        const [state, stockPassesUsed] = stack.pop()!;
+        nodesExplored++;
+        
+        // Check win condition
+        if (isWin(state)) return true;
+        
+        // Check if we've seen this state before
+        const key = getStateKey(state);
+        if (visited.has(key)) continue;
+        visited.add(key);
+        
+        // Get all legal moves and sort by priority
+        const moves = Array.from(getLegalMoves(state, drawCount, stockPassesUsed, maxStockPasses));
+        moves.sort((a, b) => scoreMove(a) - scoreMove(b)); // Lower priority first so higher priority is popped first
+        
+        // Push states onto stack (in reverse priority order so highest priority is on top)
+        for (const move of moves) {
+            const nextState = cloneState(state);
+            const passesIncrement = applyMove(nextState, move, drawCount);
+            stack.push([nextState, stockPassesUsed + passesIncrement]);
+        }
+    }
+    
     return false;
 };
 
-// --- Helper Logic (Duplicated/Adapted from gameUtils to be pure and standalone) ---
+// Main solver entry point
+export const isGameWinnable = (
+    initialState: GameState,
+    drawCount: 1 | 3 = 1,
+    maxNodes = 1_000_000,
+    timeLimitMs = 2000,
+    maxStockPasses = 3
+): boolean => {
+    const deadline = Date.now() + timeLimitMs;
+    return dfs(initialState, drawCount, maxStockPasses, maxNodes, deadline);
+};
 
-function canMoveToFoundation(card: Card, state: GameState): boolean {
-    const pile = state.foundations[card.suit];
-    const targetRank = pile.length > 0 ? getRankValue(pile[pile.length - 1].rank) : 0;
-    return getRankValue(card.rank) === targetRank + 1;
-}
-
-function moveCardToFoundation(card: Card, state: GameState, source: 'waste' | 'tableau', tableauIdx?: number) {
-    // Remove
-    if (source === 'waste') {
-        state.waste.pop();
-    } else if (source === 'tableau' && tableauIdx !== undefined) {
-        state.tableau[tableauIdx].pop();
-        if (state.tableau[tableauIdx].length > 0) {
-            state.tableau[tableauIdx][state.tableau[tableauIdx].length - 1].isFaceUp = true;
-        }
-    }
-    // Add
-    state.foundations[card.suit].push(card);
+// Helper functions
+function canMoveToFoundation(card: Card, foundation: Card[]): boolean {
+    if (foundation.length === 0) return getRankValue(card.rank) === 1; // Ace
+    const top = foundation[foundation.length - 1];
+    return getRankValue(card.rank) === getRankValue(top.rank) + 1;
 }
 
 function canMoveToTableau(card: Card, targetPile: Card[]): boolean {
-    if (targetPile.length === 0) {
-        return card.rank === 'K';
-    }
-    const targetCard = targetPile[targetPile.length - 1];
-    return isOppositeColor(card, targetCard) && getRankValue(card.rank) === getRankValue(targetCard.rank) - 1;
+    if (targetPile.length === 0) return card.rank === 'K';
+    const top = targetPile[targetPile.length - 1];
+    if (!top.isFaceUp) return false;
+    return isOppositeColor(card, top) && getRankValue(card.rank) === getRankValue(top.rank) - 1;
 }

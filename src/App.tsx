@@ -19,11 +19,6 @@ function App() {
   const [showDrawChangeModal, setShowDrawChangeModal] = useState<1 | 3 | null>(null);
 
   const handleDrawChangeRequest = (newCount: 1 | 3) => {
-      // Check if game is in progress (simplistic check: score > 0 or moves made? 
-      // Actually, any state change from initial dealing is "in progress".
-      // For simplicity, let's just always show the modal if the count is different,
-      // because changing draw count effectively requires a new deal to be fair/winnable usually,
-      // or at least the user asked to "warn them".
       if (newCount !== drawCount) {
           setShowDrawChangeModal(newCount);
       }
@@ -34,6 +29,52 @@ function App() {
           changeDrawCount(showDrawChangeModal);
           setShowDrawChangeModal(null);
       }
+  };
+
+  // Helper to render waste pile
+  const renderWastePile = () => {
+      if (gameState.waste.length === 0) return null;
+
+      // In Draw 3 mode, we might want to see the last 3 cards if possible, 
+      // but only the very top one is clickable.
+      // Standard Solitaire visuals: 
+      // - Top card (visible, clickable)
+      // - Card underneath (partially visible, not clickable)
+      // - Card underneath that (partially visible, not clickable)
+      
+      const visibleCount = 3;
+      const startIndex = Math.max(0, gameState.waste.length - visibleCount);
+      const visibleWaste = gameState.waste.slice(startIndex);
+
+      return (
+          <div className="relative w-20 h-28">
+              {visibleWaste.map((card, idx) => {
+                  const isTopCard = idx === visibleWaste.length - 1;
+                  const offset = idx * 12; // 12px offset for fanning
+                  return (
+                      <div 
+                          key={card.id} 
+                          className="absolute top-0 left-0 transition-all duration-200"
+                          style={{ left: `${offset}px`, zIndex: idx }}
+                      >
+                          <CardComponent 
+                              card={card}
+                              onClick={() => {
+                                  // Only the top card is interactive
+                                  if (isTopCard) {
+                                      handleCardClick(card, 'waste');
+                                  }
+                              }}
+                              isSelected={isTopCard && selectedCard?.card.id === card.id}
+                              // Only pointer-events-auto for top card if we want to be strict with CSS, 
+                              // but onClick check above handles logic.
+                              className={!isTopCard ? "brightness-90" : ""}
+                          />
+                      </div>
+                  );
+              })}
+          </div>
+      );
   };
 
   return (
@@ -70,7 +111,7 @@ function App() {
 
         {/* Top Section: Stock, Waste, Foundations */}
         <div className="flex justify-between mb-8 gap-4">
-          <div className="flex gap-4">
+          <div className="flex gap-8"> {/* Increased gap to accommodate fanned waste */}
             {/* Stock */}
             <div onClick={drawCard} className="relative w-20 h-28 cursor-pointer">
                {gameState.stock.length > 0 ? (
@@ -87,18 +128,8 @@ function App() {
             </div>
 
             {/* Waste */}
-            <div className="relative w-20 h-28">
-              {/* Show slightly fanned waste if we have multiple cards? For now just top card */}
-              {gameState.waste.length > 0 && (
-                <div className="relative">
-                    {/* Visual hint of pile depth if needed, or simplified to just top card logic for now */}
-                    <CardComponent 
-                    card={gameState.waste[gameState.waste.length - 1]} 
-                    onClick={() => handleCardClick(gameState.waste[gameState.waste.length - 1], 'waste')}
-                    isSelected={selectedCard?.card.id === gameState.waste[gameState.waste.length - 1].id}
-                    />
-                </div>
-              )}
+            <div className="relative w-20 h-28 min-w-[7rem]"> {/* Min width to reserve space for fan */}
+               {renderWastePile()}
             </div>
           </div>
 

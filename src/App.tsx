@@ -45,11 +45,11 @@ function App() {
       const visibleWaste = gameState.waste.slice(startIndex);
 
       return (
-          <div className="relative w-20 h-28">
+          <div className="relative w-24 h-36">
               <AnimatePresence>
               {visibleWaste.map((card, idx) => {
                   const isTopCard = idx === visibleWaste.length - 1;
-                  const offset = idx * 12; // 12px offset for fanning
+                  const offset = idx * 24; // increased offset for fanning
                   return (
                       <motion.div 
                           key={card.id} 
@@ -138,72 +138,72 @@ function App() {
           </div>
         </div>
 
-        {/* Top Section: Stock, Waste, Foundations */}
-        <div className="flex justify-between mb-8 gap-4">
-          <div className="flex gap-8">
-            {/* Stock */}
-            <div onClick={drawCard} className="relative w-20 h-28 cursor-pointer">
-               {gameState.stock.length > 0 ? (
-                 <div className="w-20 h-28 bg-blue-800 rounded-lg border-2 border-white shadow-md flex items-center justify-center">
-                    <div className="w-16 h-24 border border-blue-600 rounded opacity-50 bg-pattern"></div>
-                 </div>
-               ) : (
-                 <div className="w-20 h-28 border-2 border-green-700 rounded-lg flex items-center justify-center text-green-700 font-bold text-2xl">↺</div>
-               )}
-            </div>
-
-            {/* Waste */}
-            <div className="relative w-20 h-28 min-w-[7rem]">
-               {renderWastePile()}
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            {/* Foundations */}
-            {(['hearts', 'diamonds', 'clubs', 'spades'] as Suit[]).map((suit) => (
-              <div 
-                key={suit} 
-                className="w-20 h-28 border-2 border-green-700 rounded-lg flex items-center justify-center bg-green-900 bg-opacity-20"
-                onClick={() => {
-                   if (gameState.foundations[suit].length === 0 && selectedCard) {
-                       handleCardClick(selectedCard.card, `foundation-${suit}`);
-                   }
-                }}
-                data-drop-zone={`foundation-${suit}`}
-              >
-                 {gameState.foundations[suit].length > 0 ? (
-                   <CardComponent 
-                      card={gameState.foundations[suit][gameState.foundations[suit].length - 1]} 
-                      onClick={() => handleCardClick(gameState.foundations[suit][gameState.foundations[suit].length - 1], `foundation-${suit}`)}
-                      isSelected={selectedCard?.card.id === gameState.foundations[suit][gameState.foundations[suit].length - 1].id}
-                   />
-                 ) : (
-                   <div className="text-3xl text-green-800 opacity-50">
-                      {suit === 'hearts' ? '♥' : suit === 'diamonds' ? '♦' : suit === 'clubs' ? '♣' : '♠'}
+          {/* Top Section: Stock, Waste, Foundations */}
+          <div className="flex justify-between mb-8 gap-4">
+            <div className="flex gap-8">
+              {/* Stock */}
+              <div onClick={drawCard} className="relative w-24 h-36 cursor-pointer">
+                 {gameState.stock.length > 0 ? (
+                   <div className="w-24 h-36 bg-blue-800 rounded-lg border-2 border-white shadow-md flex items-center justify-center">
+                      <div className="w-20 h-32 border border-blue-600 rounded opacity-50 bg-pattern"></div>
                    </div>
+                 ) : (
+                   <div className="w-24 h-36 border-2 border-green-700 rounded-lg flex items-center justify-center text-green-700 font-bold text-2xl">↺</div>
                  )}
               </div>
-            ))}
+  
+              {/* Waste */}
+              <div className="relative w-24 h-36 min-w-[7rem]">
+                 {renderWastePile()}
+              </div>
+            </div>
+  
+            <div className="flex gap-4">
+              {/* Foundations */}
+              {(['hearts', 'diamonds', 'clubs', 'spades'] as Suit[]).map((suit) => (
+                <div 
+                  key={suit} 
+                  className="w-24 h-36 border-2 border-green-700 rounded-lg flex items-center justify-center bg-green-900 bg-opacity-20"
+                  onClick={() => {
+                     if (gameState.foundations[suit].length === 0 && selectedCard) {
+                         handleCardClick(selectedCard.card, `foundation-${suit}`);
+                     }
+                  }}
+                  data-drop-zone={`foundation-${suit}`}
+                >
+                   {gameState.foundations[suit].length > 0 ? (
+                     <CardComponent 
+                        card={gameState.foundations[suit][gameState.foundations[suit].length - 1]} 
+                        onClick={() => handleCardClick(gameState.foundations[suit][gameState.foundations[suit].length - 1], `foundation-${suit}`)}
+                        isSelected={selectedCard?.card.id === gameState.foundations[suit][gameState.foundations[suit].length - 1].id}
+                     />
+                   ) : (
+                     <div className="text-3xl text-green-800 opacity-50">
+                        {suit === 'hearts' ? '♥' : suit === 'diamonds' ? '♦' : suit === 'clubs' ? '♣' : '♠'}
+                     </div>
+                   )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-
-        {/* Tableau */}
-        <div className="flex justify-between gap-2 md:gap-4">
-          {gameState.tableau.map((pile, pileIndex) => (
-            <div 
-              key={pileIndex} 
-              className="relative w-20 h-96"
-              onClick={() => {
-                  if (pile.length === 0) {
-                      handleEmptyTableauClick(pileIndex);
-                  }
-              }}
-              data-drop-zone={`tableau-${pileIndex}`}
-            >
-               {/* Empty placeholder */}
-               {pile.length === 0 && (
-                   <div className="w-20 h-28 border border-green-700 rounded-lg bg-green-900 bg-opacity-10 absolute top-0 left-0"></div>
-               )}
+  
+          {/* Tableau */}
+          <div className="flex justify-between gap-2 md:gap-4 mt-12">
+            {gameState.tableau.map((pile, pileIndex) => (
+              <div 
+                key={pileIndex} 
+                className="relative w-24 h-96"
+                onClick={() => {
+                    if (pile.length === 0) {
+                        handleEmptyTableauClick(pileIndex);
+                    }
+                }}
+                data-drop-zone={`tableau-${pileIndex}`}
+              >
+                 {/* Empty placeholder */}
+                 {pile.length === 0 && (
+                     <div className="w-24 h-36 border border-green-700 rounded-lg bg-green-900 bg-opacity-10 absolute top-0 left-0"></div>
+                 )}
 
                <AnimatePresence>
                {pile.map((card, cardIndex) => (

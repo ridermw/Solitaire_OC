@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { createDeck, shuffleDeck, getRankValue, isOppositeColor } from '../utils/cardUtils';
+import { getRankValue, isOppositeColor } from '../utils/cardUtils';
+import { dealNewGame } from '../utils/gameLogic';
+import { isGameWinnable } from '../utils/solver';
 import type { Card, GameState, Suit } from '../types/game';
 
 const INITIAL_GAME_STATE: GameState = {
@@ -18,31 +20,37 @@ const INITIAL_GAME_STATE: GameState = {
 export const useSolitaire = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [selectedCard, setSelectedCard] = useState<{ card: Card, source: string, index?: number } | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     startNewGame();
   }, []);
 
-  const startNewGame = () => {
-    const deck = shuffleDeck(createDeck());
-    const tableau: Card[][] = [[], [], [], [], [], [], []];
-    
-    // Deal cards to tableau
-    let cardIndex = 0;
-    for (let i = 0; i < 7; i++) {
-      for (let j = 0; j <= i; j++) {
-        const card = deck[cardIndex++];
-        if (j === i) card.isFaceUp = true;
-        tableau[i].push(card);
-      }
-    }
+  const startNewGame = async () => {
+    setIsGenerating(true);
+    // Use setTimeout to allow UI to render loading state if needed
+    setTimeout(() => {
+        let attempts = 0;
+        let winnableGame: GameState | null = null;
+        
+        while (attempts < 20 && !winnableGame) { // Limit attempts to avoid freezing
+            const candidate = dealNewGame();
+            if (isGameWinnable(candidate)) {
+                winnableGame = candidate;
+            }
+            attempts++;
+        }
 
-    setGameState({
-      ...INITIAL_GAME_STATE,
-      stock: deck.slice(cardIndex),
-      tableau,
-    });
-    setSelectedCard(null);
+        // Fallback if solver fails (rare, but possible with simple heuristic)
+        if (!winnableGame) {
+             console.warn("Could not find provably winnable game in attempts, dealing random.");
+             winnableGame = dealNewGame();
+        }
+
+        setGameState(winnableGame);
+        setSelectedCard(null);
+        setIsGenerating(false);
+    }, 10);
   };
 
   const drawCard = () => {
@@ -195,6 +203,7 @@ export const useSolitaire = () => {
   return {
     gameState,
     selectedCard,
+    isGenerating,
     startNewGame,
     drawCard,
     handleCardClick,

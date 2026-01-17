@@ -3,7 +3,7 @@ import { Card as CardComponent } from './components/Card';
 import type { Suit } from './types/game';
 
 function App() {
-  const { gameState, selectedCard, startNewGame, drawCard, handleCardClick, handleEmptyTableauClick } = useSolitaire();
+  const { gameState, selectedCard, isGenerating, startNewGame, drawCard, handleCardClick, handleEmptyTableauClick } = useSolitaire();
 
   return (
     <div className="min-h-screen bg-felt-green text-white p-4 font-sans select-none overflow-hidden">
@@ -12,9 +12,10 @@ function App() {
           <h1 className="text-3xl font-bold tracking-wider text-yellow-100 shadow-sm">Solitaire</h1>
           <button 
             onClick={startNewGame}
-            className="px-4 py-2 bg-green-800 hover:bg-green-700 text-white rounded border border-green-600 shadow-lg transition-colors"
+            disabled={isGenerating}
+            className={`px-4 py-2 bg-green-800 hover:bg-green-700 text-white rounded border border-green-600 shadow-lg transition-colors flex items-center ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            New Game
+            {isGenerating ? 'Dealling...' : 'New Game'}
           </button>
         </div>
 

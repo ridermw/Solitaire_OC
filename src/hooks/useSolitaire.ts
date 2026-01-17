@@ -21,27 +21,30 @@ export const useSolitaire = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [selectedCard, setSelectedCard] = useState<{ card: Card, source: string, index?: number } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [drawCount, setDrawCount] = useState<1 | 3>(1);
 
   useEffect(() => {
     startNewGame();
-  }, []);
+  }, []); // Run only on mount
 
-  const startNewGame = async () => {
+  const startNewGame = async (overrideDrawCount?: 1 | 3) => {
     setIsGenerating(true);
+    const count = overrideDrawCount ?? drawCount;
+
     // Use setTimeout to allow UI to render loading state if needed
     setTimeout(() => {
         let attempts = 0;
         let winnableGame: GameState | null = null;
         
-        while (attempts < 20 && !winnableGame) { // Limit attempts to avoid freezing
+        while (attempts < 20 && !winnableGame) { 
             const candidate = dealNewGame();
-            if (isGameWinnable(candidate)) {
+            if (isGameWinnable(candidate, count)) { // Pass draw count to solver
                 winnableGame = candidate;
             }
             attempts++;
         }
 
-        // Fallback if solver fails (rare, but possible with simple heuristic)
+        // Fallback
         if (!winnableGame) {
              console.warn("Could not find provably winnable game in attempts, dealing random.");
              winnableGame = dealNewGame();
@@ -51,6 +54,11 @@ export const useSolitaire = () => {
         setSelectedCard(null);
         setIsGenerating(false);
     }, 10);
+  };
+
+  const changeDrawCount = (newCount: 1 | 3) => {
+      setDrawCount(newCount);
+      startNewGame(newCount);
   };
 
   const drawCard = () => {
@@ -64,13 +72,19 @@ export const useSolitaire = () => {
       }));
     } else {
       const newStock = [...gameState.stock];
-      const card = newStock.pop()!;
-      card.isFaceUp = true;
+      const cardsToDraw: Card[] = [];
+      
+      const count = Math.min(drawCount, newStock.length);
+      for (let i = 0; i < count; i++) {
+           const card = newStock.pop()!;
+           card.isFaceUp = true;
+           cardsToDraw.push(card);
+      }
       
       setGameState(prev => ({
         ...prev,
         stock: newStock,
-        waste: [...prev.waste, card],
+        waste: [...prev.waste, ...cardsToDraw],
       }));
     }
     setSelectedCard(null);
@@ -78,7 +92,6 @@ export const useSolitaire = () => {
 
   const handleCardClick = (card: Card, source: string, index?: number) => {
     if (!card.isFaceUp && source.startsWith('tableau')) {
-        // Only top card can be flipped if it is not face up (handled automatically by game logic usually, but here for safety)
         return;
     }
 
@@ -136,9 +149,6 @@ export const useSolitaire = () => {
         }
     }
 
-    // If move invalid, just change selection to the new card (if it's a valid selection start)
-    // Actually, standard UX is to deselect if invalid move, or select new card if we clicked a valid new source.
-    // For simplicity, let's just deselect.
     setSelectedCard(null);
   };
   
@@ -190,8 +200,6 @@ export const useSolitaire = () => {
           if (cardsToMove.length === 1) {
               newGameState.foundations[suit] = [...newGameState.foundations[suit], ...cardsToMove];
           } else {
-              // Invalid move (multiple cards to foundation) - revert removal (complex, so just return early before state update in a real app, but here we assumed valid move before calling execute)
-              // For safety in this simplified logic, we just don't update if logic fails
               return; 
           }
       }
@@ -204,7 +212,9 @@ export const useSolitaire = () => {
     gameState,
     selectedCard,
     isGenerating,
+    drawCount,
     startNewGame,
+    changeDrawCount,
     drawCard,
     handleCardClick,
     handleEmptyTableauClick,

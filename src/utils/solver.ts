@@ -35,7 +35,7 @@ const cloneState = (state: GameState): GameState => {
 
 const getTopCard = (pile: Card[]): Card | null => pile.length > 0 ? pile[pile.length - 1] : null;
 
-export const isGameWinnable = (initialState: GameState, maxMoves = 500): boolean => {
+export const isGameWinnable = (initialState: GameState, drawCount: 1 | 3 = 1, maxMoves = 1000): boolean => {
     // A simplified greedy solver
     let state = cloneState(initialState);
     let movesWithoutProgress = 0;
@@ -49,7 +49,8 @@ export const isGameWinnable = (initialState: GameState, maxMoves = 500): boolean
             f: Object.values(s.foundations).map(p => p.length),
             t: s.tableau.map(p => p.map(c => c.isFaceUp ? c.id : 'X')),
             s: s.stock.length,
-            w: s.waste.length > 0 ? s.waste[s.waste.length - 1].id : null
+            w: s.waste.length > 0 ? s.waste[s.waste.length - 1].id : null,
+            wc: s.waste.length // Include waste count for better accuracy
         });
     };
 
@@ -120,10 +121,13 @@ export const isGameWinnable = (initialState: GameState, maxMoves = 500): boolean
         // 3. Draw from stock
         if (!moved) {
             if (state.stock.length > 0) {
-                // Draw
-                const card = state.stock.pop()!;
-                card.isFaceUp = true;
-                state.waste.push(card);
+                // Draw logic with drawCount
+                const count = Math.min(drawCount, state.stock.length);
+                for (let i = 0; i < count; i++) {
+                    const card = state.stock.pop()!;
+                    card.isFaceUp = true;
+                    state.waste.push(card);
+                }
                 moved = true;
             } else if (state.waste.length > 0) {
                 // Recycle (only if we haven't just done this without progress)

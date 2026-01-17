@@ -3,6 +3,7 @@ import { getRankValue, isOppositeColor } from '../utils/cardUtils';
 import { dealNewGame } from '../utils/gameLogic';
 import { isGameWinnable } from '../utils/solver';
 import { logGameEvent } from '../utils/logger';
+import { playCardFlipSound, playMoveSound, playShuffleSound, playWinSound } from '../utils/audio';
 import type { Card, GameState, Suit } from '../types/game';
 
 const INITIAL_GAME_STATE: GameState = {
@@ -29,11 +30,48 @@ export const useSolitaire = () => {
   // Animation state for dealing
   const [isDealing, setIsDealing] = useState(false);
   const [gameKey, setGameKey] = useState(0);
+  // Undo history stack
+  const [history, setHistory] = useState<GameState[]>([]);
+
+  // Helper to deep clone state to avoid reference mutation issues
+  const cloneState = (state: GameState): GameState => {
+    return {
+        stock: state.stock.map(c => ({ ...c })),
+        waste: state.waste.map(c => ({ ...c })),
+        foundations: {
+            hearts: state.foundations.hearts.map(c => ({ ...c })),
+            diamonds: state.foundations.diamonds.map(c => ({ ...c })),
+            clubs: state.foundations.clubs.map(c => ({ ...c })),
+            spades: state.foundations.spades.map(c => ({ ...c })),
+        },
+        // Map each pile to a new array and clone each card
+        tableau: state.tableau.map(pile => pile.map(c => ({ ...c }))),
+        score: state.score
+    };
+  };
+
+  // Helper to push current state to history before mutation
+  const pushToHistory = (currentState: GameState) => {
+    setHistory(prev => [...prev, cloneState(currentState)]);
+  };
+
+  const undo = () => {
+      if (history.length === 0) return;
+      
+      const previousState = history[history.length - 1];
+      setHistory(prev => prev.slice(0, -1));
+      setGameState(previousState);
+      setSelectedCard(null);
+      logGameEvent('Undo Performed');
+  };
 
   const startNewGame = async (overrideDrawCount?: 1 | 3) => {
     // Reset state to empty before generating to ensure clean animation start
     // Increment game key to force fresh mount of game board components
     setGameKey(prev => prev + 1);
+    
+    // Clear history on new game
+    setHistory([]);
     
     // Create a completely fresh empty state object
     setGameState({
@@ -59,6 +97,7 @@ export const useSolitaire = () => {
     setIsGenerating(true);
     logGameEvent('Searching for Winnable Game', { attemptBatchSize: 10 });
     setIsDealing(true); // Start deal animation flag
+    playShuffleSound();
     const count = overrideDrawCount ?? drawCount;
 
     const searchForWinnableGame = () => {
@@ -122,6 +161,8 @@ export const useSolitaire = () => {
   };
 
   const drawCard = () => {
+    pushToHistory(gameState);
+
     if (gameState.stock.length === 0) {
       logGameEvent('Stock Recycled', { wasWasteSize: gameState.waste.length });
       // Recycle waste to stock
@@ -131,6 +172,7 @@ export const useSolitaire = () => {
         stock: newStock,
         waste: [],
       }));
+      playCardFlipSound();
     } else {
       const newStock = [...gameState.stock];
       const cardsToDraw: Card[] = [];
@@ -145,11 +187,11 @@ export const useSolitaire = () => {
       logGameEvent('Cards Drawn', { count: cardsToDraw.length, cards: cardsToDraw });
 
       setGameState(prev => ({
-
         ...prev,
         stock: newStock,
         waste: [...prev.waste, ...cardsToDraw],
       }));
+      playCardFlipSound();
     }
     setSelectedCard(null);
   };
@@ -283,7 +325,11 @@ export const useSolitaire = () => {
     from: { card: Card, source: string, index?: number },
     to: { source: string, index?: number }
   ) => {
-      const newGameState = { ...gameState };
+      // Save current state to history before executing move
+      pushToHistory(gameState);
+
+      // Deep clone current state for the new state to prevent mutation of the state we just pushed to history
+      const newGameState = cloneState(gameState);
       let cardsToMove: Card[] = [];
 
       // Remove from source
@@ -328,8 +374,15 @@ export const useSolitaire = () => {
 
       logGameEvent('Move Executed', { from: from.source, to: to.source, cards: cardsToMove.map(c => c.id) });
       setGameState(newGameState);
+      playMoveSound();
       setSelectedCard(null);
   };
+
+  useEffect(() => {
+    if (Object.values(gameState.foundations).every(pile => pile.length === 13)) {
+        playWinSound();
+    }
+  }, [gameState.foundations]);
 
   return {
     gameState,
@@ -345,6 +398,9 @@ export const useSolitaire = () => {
     handleCardClick,
     handleEmptyTableauClick,
     handleDragMove,
-    gameKey
+    gameKey,
+    undo,
+    canUndo: history.length > 0,
+    isWon: Object.values(gameState.foundations).every(pile => pile.length === 13)
   };
 };

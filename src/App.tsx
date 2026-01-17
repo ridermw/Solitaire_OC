@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSolitaire } from './hooks/useSolitaire';
 import { Card as CardComponent } from './components/Card';
+import { WinAnimation } from './components/WinAnimation';
 import type { Suit } from './types/game';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -18,7 +19,11 @@ function App() {
     drawCard, 
     handleCardClick, 
     handleEmptyTableauClick,
-    handleDragMove
+    handleDragMove,
+    gameKey,
+    undo,
+    canUndo,
+    isWon
   } = useSolitaire();
 
   const [showDrawChangeModal, setShowDrawChangeModal] = useState<1 | 3 | null>(null);
@@ -101,7 +106,8 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-felt-green text-white p-4 font-sans select-none overflow-hidden relative">
+
+    <div key={gameKey} className="min-h-screen bg-felt-green text-white p-4 font-sans select-none overflow-hidden relative">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold tracking-wider text-yellow-100 shadow-sm">Solitaire</h1>
@@ -134,6 +140,14 @@ function App() {
                 className={`px-4 py-2 bg-green-800 hover:bg-green-700 text-white rounded border border-green-600 shadow-lg transition-colors flex items-center ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {isGenerating ? 'Dealing...' : 'New Game'}
+              </button>
+
+              <button
+                  onClick={undo}
+                  disabled={!canUndo || isGenerating}
+                  className={`px-4 py-2 bg-yellow-700 hover:bg-yellow-600 text-white rounded border border-yellow-500 shadow-lg transition-colors flex items-center gap-2 ${(!canUndo || isGenerating) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                  <span className="text-xl">↺</span> Undo
               </button>
           </div>
         </div>
@@ -285,6 +299,13 @@ function App() {
       <div className="fixed bottom-4 right-4 text-xs text-green-200 opacity-70">
           Click to select, click destination to move.
       </div>
+
+      {/* Win Animation Overlay */}
+      <AnimatePresence>
+        {isWon && (
+          <WinAnimation onRestart={() => startNewGame()} />
+        )}
+      </AnimatePresence>
 
       {/* Confirmation Modal */}
       {showDrawChangeModal && (

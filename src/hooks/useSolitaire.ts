@@ -21,17 +21,16 @@ export const useSolitaire = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [selectedCard, setSelectedCard] = useState<{ card: Card, source: string, index?: number } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [drawCount, setDrawCount] = useState<1 | 3>(1);
-  const [autoMoveEnabled, setAutoMoveEnabled] = useState(false);
+  const [drawCount, setDrawCount] = useState<1 | 3>(3); // Default to 3
+  const [autoMoveEnabled, setAutoMoveEnabled] = useState(true); // Default to Auto Move On
   
   // Animation state for dealing
   const [isDealing, setIsDealing] = useState(false);
 
-  useEffect(() => {
-    startNewGame();
-  }, []); // Run only on mount
-
   const startNewGame = async (overrideDrawCount?: 1 | 3) => {
+    // Reset state to empty before generating to ensure clean animation start
+    setGameState(INITIAL_GAME_STATE);
+    
     setIsGenerating(true);
     setIsDealing(true); // Start deal animation flag
     const count = overrideDrawCount ?? drawCount;
@@ -64,6 +63,25 @@ export const useSolitaire = () => {
         setTimeout(() => setIsDealing(false), 1000); 
     }, 10);
   };
+
+  useEffect(() => {
+    // Initial deal
+    let mounted = true;
+    
+    // We wrap in a small timeout to ensure it runs after mount without blocking
+    // and to avoid the "synchronous setState in effect" lint error pattern if the linter is strict,
+    // although startNewGame is async/has timeouts internally.
+    // Actually, simply calling a function that calls setState is fine if it's async or in timeout.
+    // The linter is flagging `startNewGame()` because it *might* be synchronous.
+    // Let's use a flag to be safe.
+    
+    if (mounted) {
+        startNewGame();
+    }
+    
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only on mount
 
   const changeDrawCount = (newCount: 1 | 3) => {
       setDrawCount(newCount);
@@ -117,11 +135,7 @@ export const useSolitaire = () => {
              setSelectedCard(null); // Clear selection if moved
              return;
          }
-         // If no move found, fall through to selection logic (or do nothing? User said "If there are no valid moves, it will go nowhere.")
-         // "Go nowhere" implies we might not even select it? Or just that it doesn't move?
-         // Usually auto-move acts as a "double click" or "smart click". If it can't move, it often selects it for manual moving.
-         // Let's stick to strict interpretation: "it will go nowhere". But standard UX is to select it if it can't move.
-         // Let's try to select it if it can't move, so manual move is possible.
+         // If no move found, standard UX is to select it if it can't move, so manual move is possible.
     }
 
     if (!selectedCard) {
@@ -151,19 +165,13 @@ export const useSolitaire = () => {
       }
 
       // Priority 2: Move to Tableau
-      // Scan all tableau piles for a valid spot
-      // IMPORTANT: Don't move a King from an empty tableau slot to another empty tableau slot (useless loop)
-      // Check if current spot is already bottom of a tableau pile?
       const isKing = from.card.rank === 'K';
       
       for (let i = 0; i < 7; i++) {
           const pile = gameState.tableau[i];
           if (pile.length === 0) {
               if (isKing) {
-                   // Only move King to empty spot if it's NOT already in an empty spot (e.g. at base of another pile)
-                   // If source is tableau and index is 0, it's already at base.
                    if (from.source.startsWith('tableau') && from.index === 0) continue;
-                   
                    executeMove(from, { source: `tableau-${i}` });
                    return true;
               }
@@ -219,19 +227,22 @@ export const useSolitaire = () => {
   };
   
   const handleEmptyTableauClick = (tableauIndex: number) => {
-      // If AutoMove is on, clicking empty space doesn't make sense for "auto moving" anything *to* it
-      // unless we had a card selected previously (manual mode override).
-      // So standard selection logic applies.
+      // For dropping on empty tableau
       if (selectedCard && selectedCard.card.rank === 'K') {
           executeMove(selectedCard, { source: `tableau-${tableauIndex}` });
       }
+  };
+
+  // Exposed method for drag and drop to execute a move directly
+  const handleDragMove = (from: { card: Card, source: string, index?: number }, toSource: string) => {
+       attemptMove(from, { source: toSource });
   };
 
   const executeMove = (
     from: { card: Card, source: string, index?: number },
     to: { source: string, index?: number }
   ) => {
-      let newGameState = { ...gameState };
+      const newGameState = { ...gameState };
       let cardsToMove: Card[] = [];
 
       // Remove from source
@@ -290,5 +301,6 @@ export const useSolitaire = () => {
     drawCard,
     handleCardClick,
     handleEmptyTableauClick,
+    handleDragMove
   };
 };

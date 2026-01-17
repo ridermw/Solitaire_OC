@@ -37,7 +37,7 @@ const getTopCard = (pile: Card[]): Card | null => pile.length > 0 ? pile[pile.le
 
 export const isGameWinnable = (initialState: GameState, drawCount: 1 | 3 = 1, maxMoves = 1000): boolean => {
     // A simplified greedy solver
-    let state = cloneState(initialState);
+    const state = cloneState(initialState);
     let movesWithoutProgress = 0;
     const history = new Set<string>();
 

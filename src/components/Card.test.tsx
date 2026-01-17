@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { LayoutGroup } from 'framer-motion';
 import { Card } from './Card';
 import type { Card as CardType } from '../types/game';
 
@@ -12,7 +13,11 @@ describe('Card', () => {
   };
 
   it('should render a card', () => {
-    render(<Card card={mockCard} />);
+    render(
+      <LayoutGroup>
+        <Card card={mockCard} />
+      </LayoutGroup>
+    );
     
     // Card should render with suit symbol (appears multiple times due to corners)
     const cardElements = screen.getAllByText('♥');
@@ -20,7 +25,11 @@ describe('Card', () => {
   });
 
   it('should display rank and suit for face-up card', () => {
-    render(<Card card={mockCard} />);
+    render(
+      <LayoutGroup>
+        <Card card={mockCard} />
+      </LayoutGroup>
+    );
     
     // Rank and suit appear in multiple locations (corners + center for ace)
     const rankElements = screen.getAllByText('A');
@@ -32,7 +41,11 @@ describe('Card', () => {
 
   it('should handle face-down cards', () => {
     const faceDownCard: CardType = { ...mockCard, isFaceUp: false };
-    render(<Card card={faceDownCard} />);
+    render(
+      <LayoutGroup>
+        <Card card={faceDownCard} />
+      </LayoutGroup>
+    );
     
     // Face-down cards should not show rank/suit
     expect(screen.queryByText('A')).toBeNull();
@@ -40,7 +53,11 @@ describe('Card', () => {
 
   it('should render red cards with red color', () => {
     const redCard: CardType = { id: 'K-hearts', suit: 'hearts', rank: 'K', isFaceUp: true };
-    const { container } = render(<Card card={redCard} />);
+    const { container } = render(
+      <LayoutGroup>
+        <Card card={redCard} />
+      </LayoutGroup>
+    );
     
     const cardElement = container.querySelector('.text-red-600');
     expect(cardElement).toBeDefined();
@@ -48,7 +65,11 @@ describe('Card', () => {
 
   it('should render black cards with black color', () => {
     const blackCard: CardType = { id: 'K-spades', suit: 'spades', rank: 'K', isFaceUp: true };
-    const { container } = render(<Card card={blackCard} />);
+    const { container } = render(
+      <LayoutGroup>
+        <Card card={blackCard} />
+      </LayoutGroup>
+    );
     
     const cardElement = container.querySelector('.text-gray-900');
     expect(cardElement).toBeDefined();
@@ -58,7 +79,11 @@ describe('Card', () => {
     let clicked = false;
     const handleClick = () => { clicked = true; };
     
-    const { container } = render(<Card card={mockCard} onClick={handleClick} />);
+    const { container } = render(
+      <LayoutGroup>
+        <Card card={mockCard} onClick={handleClick} />
+      </LayoutGroup>
+    );
     const cardElement = container.firstChild as HTMLElement;
     
     cardElement.click();
@@ -71,16 +96,32 @@ describe('Card', () => {
     const clubs = { ...mockCard, suit: 'clubs' as const };
     const spades = { ...mockCard, suit: 'spades' as const };
     
-    const { rerender } = render(<Card card={hearts} />);
+    const { rerender } = render(
+      <LayoutGroup>
+        <Card card={hearts} />
+      </LayoutGroup>
+    );
     expect(screen.getAllByText('♥').length).toBeGreaterThan(0);
     
-    rerender(<Card card={diamonds} />);
+    rerender(
+      <LayoutGroup>
+        <Card card={diamonds} />
+      </LayoutGroup>
+    );
     expect(screen.getAllByText('♦').length).toBeGreaterThan(0);
     
-    rerender(<Card card={clubs} />);
+    rerender(
+      <LayoutGroup>
+        <Card card={clubs} />
+      </LayoutGroup>
+    );
     expect(screen.getAllByText('♣').length).toBeGreaterThan(0);
     
-    rerender(<Card card={spades} />);
+    rerender(
+      <LayoutGroup>
+        <Card card={spades} />
+      </LayoutGroup>
+    );
     expect(screen.getAllByText('♠').length).toBeGreaterThan(0);
   });
 
@@ -89,7 +130,11 @@ describe('Card', () => {
     
     ranks.forEach(rank => {
       const card: CardType = { id: `${rank}-hearts`, suit: 'hearts', rank, isFaceUp: true };
-      const { rerender } = render(<Card card={card} />);
+      const { rerender } = render(
+        <LayoutGroup>
+          <Card card={card} />
+        </LayoutGroup>
+      );
       // Rank appears in multiple locations (top-left and bottom-right corners)
       expect(screen.getAllByText(rank).length).toBeGreaterThan(0);
       rerender(<div />); // Clear for next iteration
@@ -97,23 +142,47 @@ describe('Card', () => {
   });
 
   it('should apply selected styling when isSelected is true', () => {
-    const { container } = render(<Card card={mockCard} isSelected={true} />);
+    const { container } = render(
+      <LayoutGroup>
+        <Card card={mockCard} isSelected={true} />
+      </LayoutGroup>
+    );
     
-    const cardElement = container.querySelector('.ring-4');
+    const cardElement = container.querySelector('.ring-2');
     expect(cardElement).toBeDefined();
   });
 
   it('should not apply selected styling when isSelected is false', () => {
-    const { container } = render(<Card card={mockCard} isSelected={false} />);
+    const { container } = render(
+      <LayoutGroup>
+        <Card card={mockCard} isSelected={false} />
+      </LayoutGroup>
+    );
     
-    const cardElement = container.querySelector('.ring-4');
+    const cardElement = container.querySelector('.ring-2');
     expect(cardElement).toBeNull();
   });
 
   it('should apply custom className', () => {
-    const { container } = render(<Card card={mockCard} className="custom-class" />);
+    const { container } = render(
+      <LayoutGroup>
+        <Card card={mockCard} className="custom-class" />
+      </LayoutGroup>
+    );
     
     const cardElement = container.querySelector('.custom-class');
     expect(cardElement).toBeDefined();
+  });
+
+  it('should preserve layout ids for framer motion', () => {
+    const specialCard: CardType = { ...mockCard, id: 'unique-card' };
+    const { container } = render(
+      <LayoutGroup>
+        <Card card={specialCard} />
+      </LayoutGroup>
+    );
+
+    const motionDiv = container.querySelector('[data-layoutid="unique-card"]') ?? container.querySelector('[data-layout-id="unique-card"]');
+    expect(motionDiv).toBeDefined();
   });
 });

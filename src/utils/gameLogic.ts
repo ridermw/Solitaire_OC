@@ -27,6 +27,7 @@ export const dealNewGame = (): GameState => {
     }
     return {
         ...INITIAL_GAME_STATE,
+        foundations: { hearts: [], diamonds: [], clubs: [], spades: [] }, // Explicitly reset foundations
         stock: deck.slice(cardIndex),
         tableau,
     };

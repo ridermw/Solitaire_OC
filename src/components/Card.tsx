@@ -127,6 +127,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, className = '', isSel
   return (
     <motion.div
       layoutId={card.id}
+      data-layout-id={card.id}
       initial={false}
       onClick={onClick}
       className="relative"
@@ -137,7 +138,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, className = '', isSel
       dragElastic={0.1}
       whileDrag={{ scale: 1.1, zIndex: 100, cursor: 'grabbing' }}
       whileHover={{ scale: isDraggable ? 1.05 : 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      transition={{ type: "spring", stiffness: 400, damping: 35 }}
       style={{ touchAction: 'none' }} // Prevent scrolling on mobile while dragging
     >
         {cardContent}

@@ -24,10 +24,10 @@ Always verify changes before submitting.
 - **Type Checking (Standalone):** `npx tsc --noEmit`
 
 ### Running Tests
-*Currently, no test runner (Vitest/Jest) is configured.*
-- If adding tests, prefer **Vitest**.
-- Install: `npm install -D vitest`
-- Run: `npx vitest`
+- **Framework:** Vitest (configured).
+- **Run:** `npm test`
+- **Requirement:** All new features and bug fixes MUST include corresponding unit tests.
+- **Regression:** Run full suite before submitting changes to ensure no regressions.
 
 ## 3. Code Style & Conventions
 

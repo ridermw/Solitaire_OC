@@ -5,8 +5,8 @@ import type { GameState, Card } from '../types/game';
 // Helper to create a simple card
 const makeCard = (rank: string, suit: string, isFaceUp = true): Card => ({
   id: `${rank}-${suit}`,
-  rank: rank as any,
-  suit: suit as any,
+  rank: rank as Card['rank'],
+  suit: suit as Card['suit'],
   isFaceUp,
 });
 

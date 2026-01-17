@@ -17,7 +17,9 @@ describe('useSolitaire', () => {
     
     // The hook starts generating on mount
     // Wait for it to finish (with timeout)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
     
     // By this point it should have generated a game (or still be generating)
     expect(typeof result.current.isGenerating).toBe('boolean');
@@ -62,9 +64,23 @@ describe('useSolitaire', () => {
     expect(result.current.gameState.foundations.spades).toEqual([]);
   });
 
-  it('should initialize with 7 tableau piles', () => {
+  it('should increment gameKey when starting a new game', async () => {
     const { result } = renderHook(() => useSolitaire());
     
-    expect(result.current.gameState.tableau).toHaveLength(7);
+    const initialKey = result.current.gameKey;
+    
+    // Wrap in act and wait for the async startNewGame to complete
+    // NOTE: startNewGame contains internal timeouts/loops for searching for a winnable game,
+    // so it might take time. However, gameKey is updated synchronously at the START of the function.
+    // The test timeout suggests we are waiting for the promise to resolve, which waits for the generator loop.
+    // We only care about the synchronous update for this test.
+    
+    await act(async () => {
+       // We don't await the promise here to avoid the timeout of the full generation loop
+       // We just trigger it.
+       result.current.startNewGame();
+    });
+    
+    expect(result.current.gameKey).toBeGreaterThan(initialKey);
   });
 });

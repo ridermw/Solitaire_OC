@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getRankValue, isOppositeColor } from '../utils/cardUtils';
 import { dealNewGame } from '../utils/gameLogic';
 import { isGameWinnable } from '../utils/solver';
+import { logGameEvent } from '../utils/logger';
 import type { Card, GameState, Suit } from '../types/game';
 
 const INITIAL_GAME_STATE: GameState = {
@@ -17,6 +18,7 @@ const INITIAL_GAME_STATE: GameState = {
   score: 0,
 };
 
+
 export const useSolitaire = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [selectedCard, setSelectedCard] = useState<{ card: Card, source: string, index?: number } | null>(null);
@@ -26,9 +28,13 @@ export const useSolitaire = () => {
   
   // Animation state for dealing
   const [isDealing, setIsDealing] = useState(false);
+  const [gameKey, setGameKey] = useState(0);
 
   const startNewGame = async (overrideDrawCount?: 1 | 3) => {
     // Reset state to empty before generating to ensure clean animation start
+    // Increment game key to force fresh mount of game board components
+    setGameKey(prev => prev + 1);
+    
     // Create a completely fresh empty state object
     setGameState({
         stock: [], 
@@ -51,6 +57,7 @@ export const useSolitaire = () => {
     await new Promise(resolve => setTimeout(resolve, 50));
 
     setIsGenerating(true);
+    logGameEvent('Searching for Winnable Game', { attemptBatchSize: 10 });
     setIsDealing(true); // Start deal animation flag
     const count = overrideDrawCount ?? drawCount;
 
@@ -68,6 +75,7 @@ export const useSolitaire = () => {
         }
 
         if (foundGame) {
+            logGameEvent('Game Generated', { score: foundGame.score });
             setGameState(foundGame);
             setSelectedCard(null);
             setIsGenerating(false);
@@ -115,6 +123,7 @@ export const useSolitaire = () => {
 
   const drawCard = () => {
     if (gameState.stock.length === 0) {
+      logGameEvent('Stock Recycled', { wasWasteSize: gameState.waste.length });
       // Recycle waste to stock
       const newStock = [...gameState.waste].reverse().map(c => ({ ...c, isFaceUp: false }));
       setGameState(prev => ({
@@ -125,7 +134,7 @@ export const useSolitaire = () => {
     } else {
       const newStock = [...gameState.stock];
       const cardsToDraw: Card[] = [];
-      
+       
       const count = Math.min(drawCount, newStock.length);
       for (let i = 0; i < count; i++) {
            const card = newStock.pop()!;
@@ -133,7 +142,10 @@ export const useSolitaire = () => {
            cardsToDraw.push(card);
       }
       
+      logGameEvent('Cards Drawn', { count: cardsToDraw.length, cards: cardsToDraw });
+
       setGameState(prev => ({
+
         ...prev,
         stock: newStock,
         waste: [...prev.waste, ...cardsToDraw],
@@ -162,13 +174,16 @@ export const useSolitaire = () => {
     if (!selectedCard) {
       // Select card if valid source
       if (source === 'waste' || source.startsWith('tableau') || source.startsWith('foundation')) {
+         logGameEvent('Card Selected', { card, source, index });
          setSelectedCard({ card, source, index });
       }
     } else {
       // Attempt move
       if (selectedCard.card.id === card.id) {
+        logGameEvent('Card Deselected', { card });
         setSelectedCard(null); // Deselect
       } else {
+        logGameEvent('Move Attempted (Click)', { from: selectedCard, to: { source, index } });
         attemptMove(selectedCard, { source, index });
       }
     }
@@ -181,6 +196,7 @@ export const useSolitaire = () => {
       const targetRankVal = foundationPile.length > 0 ? getRankValue(foundationPile[foundationPile.length - 1].rank) : 0;
       
       if (getRankValue(from.card.rank) === targetRankVal + 1) {
+          logGameEvent('Auto Move Success (Foundation)', { card: from.card, target: `foundation-${suit}` });
           executeMove(from, { source: `foundation-${suit}` });
           return true;
       }
@@ -193,18 +209,21 @@ export const useSolitaire = () => {
           if (pile.length === 0) {
               if (isKing) {
                    if (from.source.startsWith('tableau') && from.index === 0) continue;
+                   logGameEvent('Auto Move Success (Tableau King)', { card: from.card, target: `tableau-${i}` });
                    executeMove(from, { source: `tableau-${i}` });
                    return true;
               }
           } else {
               const targetCard = pile[pile.length - 1];
               if (isOppositeColor(from.card, targetCard) && getRankValue(from.card.rank) === getRankValue(targetCard.rank) - 1) {
+                  logGameEvent('Auto Move Success (Tableau)', { card: from.card, target: `tableau-${i}` });
                   executeMove(from, { source: `tableau-${i}` });
                   return true;
               }
           }
       }
-
+      
+      logGameEvent('Auto Move Failed', { card: from.card });
       return false;
   };
 
@@ -256,6 +275,7 @@ export const useSolitaire = () => {
 
   // Exposed method for drag and drop to execute a move directly
   const handleDragMove = (from: { card: Card, source: string, index?: number }, toSource: string) => {
+       logGameEvent('Move Attempted (Drag)', { from, toSource });
        attemptMove(from, { source: toSource });
   };
 
@@ -301,10 +321,12 @@ export const useSolitaire = () => {
           if (cardsToMove.length === 1) {
               newGameState.foundations[suit] = [...newGameState.foundations[suit], ...cardsToMove];
           } else {
+              logGameEvent('Invalid Move (Multiple cards to foundation)', { cardsToMove });
               return; 
           }
       }
 
+      logGameEvent('Move Executed', { from: from.source, to: to.source, cards: cardsToMove.map(c => c.id) });
       setGameState(newGameState);
       setSelectedCard(null);
   };
@@ -322,6 +344,7 @@ export const useSolitaire = () => {
     drawCard,
     handleCardClick,
     handleEmptyTableauClick,
-    handleDragMove
+    handleDragMove,
+    gameKey
   };
 };

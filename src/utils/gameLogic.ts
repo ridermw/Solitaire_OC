@@ -16,13 +16,10 @@ export const dealNewGame = (): GameState => {
     for (let i = 0; i < 7; i++) {
       for (let j = 0; j <= i; j++) {
         const card = deck[cardIndex++];
-        // Create a copy to avoid mutating the original deck reference if reused? 
-        // Actually deck is fresh from createDeck/shuffleDeck.
-        // Ensure only top card is face up.
-        // IMPORTANT: We must explicitly set isFaceUp to false for others, 
-        // just in case createDeck defaults changed or we are recycling objects improperly (unlikely here but safe).
-        card.isFaceUp = (j === i); 
-        tableau[i].push(card);
+        tableau[i].push({
+          ...card,
+          isFaceUp: j === i,
+        });
       }
     }
     return {

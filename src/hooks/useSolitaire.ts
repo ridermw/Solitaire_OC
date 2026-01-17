@@ -4,6 +4,7 @@ import { dealNewGame } from '../utils/gameLogic';
 import { isGameWinnable } from '../utils/solver';
 import { logGameEvent } from '../utils/logger';
 import { playCardFlipSound, playMoveSound, playShuffleSound, playWinSound } from '../utils/audio';
+import { cloneGameState } from '../utils/cloneGameState';
 import type { Card, GameState, Suit } from '../types/game';
 
 const INITIAL_GAME_STATE: GameState = {
@@ -34,21 +35,7 @@ export const useSolitaire = () => {
   const [history, setHistory] = useState<GameState[]>([]);
 
   // Helper to deep clone state to avoid reference mutation issues
-  const cloneState = (state: GameState): GameState => {
-    return {
-        stock: state.stock.map(c => ({ ...c })),
-        waste: state.waste.map(c => ({ ...c })),
-        foundations: {
-            hearts: state.foundations.hearts.map(c => ({ ...c })),
-            diamonds: state.foundations.diamonds.map(c => ({ ...c })),
-            clubs: state.foundations.clubs.map(c => ({ ...c })),
-            spades: state.foundations.spades.map(c => ({ ...c })),
-        },
-        // Map each pile to a new array and clone each card
-        tableau: state.tableau.map(pile => pile.map(c => ({ ...c }))),
-        score: state.score
-    };
-  };
+  const cloneState = cloneGameState;
 
   // Helper to push current state to history before mutation
   const pushToHistory = (currentState: GameState) => {

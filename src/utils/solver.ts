@@ -3,6 +3,7 @@
 
 import type { Card, GameState, Suit } from '../types/game';
 import { getRankValue, isOppositeColor } from './cardUtils';
+import { cloneGameState } from './cloneGameState';
 
 // Move types for the solver
 type MoveKind =
@@ -23,20 +24,7 @@ interface Move {
 }
 
 // Helper to deep clone state for simulation
-const cloneState = (state: GameState): GameState => {
-    return {
-        stock: state.stock.map(c => ({ ...c })),
-        waste: state.waste.map(c => ({ ...c })),
-        foundations: {
-            hearts: state.foundations.hearts.map(c => ({ ...c })),
-            diamonds: state.foundations.diamonds.map(c => ({ ...c })),
-            clubs: state.foundations.clubs.map(c => ({ ...c })),
-            spades: state.foundations.spades.map(c => ({ ...c })),
-        },
-        tableau: state.tableau.map(pile => pile.map(c => ({ ...c }))),
-        score: state.score
-    };
-};
+const cloneState = cloneGameState;
 
 // Generate a unique key for state to detect cycles
 const getStateKey = (state: GameState): string => {

@@ -71,7 +71,7 @@ describe('Card', () => {
       </LayoutGroup>
     );
     
-    const cardElement = container.querySelector('.text-gray-900');
+    const cardElement = container.querySelector('.text-black');
     expect(cardElement).toBeDefined();
   });
 

@@ -185,33 +185,18 @@ function App() {
                   }}
                   data-drop-zone={`foundation-${suit}`}
                 >
-                   <AnimatePresence mode="wait">
                    {gameState.foundations[suit].length > 0 ? (
-                     <motion.div
-                        key={gameState.foundations[suit][gameState.foundations[suit].length - 1].id}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        transition={{ duration: 0.2 }}
-                     >
-                       <CardComponent 
-                          card={gameState.foundations[suit][gameState.foundations[suit].length - 1]} 
-                          onClick={() => handleCardClick(gameState.foundations[suit][gameState.foundations[suit].length - 1], `foundation-${suit}`)}
-                          isSelected={selectedCard?.card.id === gameState.foundations[suit][gameState.foundations[suit].length - 1].id}
-                       />
-                     </motion.div>
-                   ) : (
-                     <motion.div 
-                        key="placeholder"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.5 }}
-                        exit={{ opacity: 0 }}
-                        className="text-3xl text-green-800"
-                     >
-                        {suit === 'hearts' ? '♥' : suit === 'diamonds' ? '♦' : suit === 'clubs' ? '♣' : '♠'}
-                     </motion.div>
-                   )}
-                   </AnimatePresence>
+                        <CardComponent 
+                           key={gameState.foundations[suit][gameState.foundations[suit].length - 1].id}
+                           card={gameState.foundations[suit][gameState.foundations[suit].length - 1]} 
+                           onClick={() => handleCardClick(gameState.foundations[suit][gameState.foundations[suit].length - 1], `foundation-${suit}`)}
+                           isSelected={selectedCard?.card.id === gameState.foundations[suit][gameState.foundations[suit].length - 1].id}
+                        />
+                    ) : (
+                      <div className="text-3xl text-green-800 opacity-50">
+                         {suit === 'hearts' ? '♥' : suit === 'diamonds' ? '♦' : suit === 'clubs' ? '♣' : '♠'}
+                      </div>
+                    )}
                 </div>
               ))}
             </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Card as CardType } from '../types/game';
 import { getCardColor } from '../utils/cardUtils';
+import { motion } from 'framer-motion';
 
 interface CardProps {
   card: CardType;
@@ -17,25 +18,18 @@ const SUIT_SYMBOLS: Record<string, string> = {
 };
 
 export const Card: React.FC<CardProps> = ({ card, onClick, className = '', isSelected = false }) => {
-  if (!card.isFaceUp) {
-    return (
-      <div 
-        onClick={onClick}
-        className={`w-20 h-28 bg-blue-800 rounded-lg border-2 border-white shadow-md flex items-center justify-center cursor-pointer ${className}`}
-      >
-        <div className="w-16 h-24 border border-blue-600 rounded opacity-50 bg-pattern"></div>
-      </div>
-    );
-  }
-
+  const isFaceUp = card.isFaceUp;
   const color = getCardColor(card.suit);
   const colorClass = color === 'red' ? 'text-red-600' : 'text-black';
-  const selectedClass = isSelected ? 'ring-2 ring-yellow-400 transform -translate-y-2' : '';
+  const selectedClass = isSelected ? 'ring-2 ring-yellow-400 -translate-y-2' : '';
 
-  return (
+  const cardContent = !isFaceUp ? (
+      <div className={`w-20 h-28 bg-blue-800 rounded-lg border-2 border-white shadow-md flex items-center justify-center cursor-pointer ${className}`}>
+        <div className="w-16 h-24 border border-blue-600 rounded opacity-50 bg-pattern"></div>
+      </div>
+  ) : (
     <div 
-      onClick={onClick}
-      className={`w-20 h-28 bg-white rounded-lg border border-gray-300 shadow-md flex flex-col justify-between p-1 cursor-pointer select-none transition-transform ${colorClass} ${selectedClass} ${className}`}
+      className={`w-20 h-28 bg-white rounded-lg border border-gray-300 shadow-md flex flex-col justify-between p-1 cursor-pointer select-none ${colorClass} ${selectedClass} ${className}`}
     >
       <div className="text-left text-sm font-bold leading-none">
         <div>{card.rank}</div>
@@ -49,5 +43,18 @@ export const Card: React.FC<CardProps> = ({ card, onClick, className = '', isSel
         <div>{SUIT_SYMBOLS[card.suit]}</div>
       </div>
     </div>
+  );
+
+  return (
+    <motion.div
+      layoutId={card.id}
+      initial={false} // Disable initial animation for existing cards to prevent flying from corner on refresh if key persists?
+      // Actually we want layout animation.
+      onClick={onClick}
+      className="relative"
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+    >
+        {cardContent}
+    </motion.div>
   );
 };

@@ -2,15 +2,19 @@ import { useState } from 'react';
 import { useSolitaire } from './hooks/useSolitaire';
 import { Card as CardComponent } from './components/Card';
 import type { Suit } from './types/game';
+import { AnimatePresence, motion } from 'framer-motion';
 
 function App() {
   const { 
     gameState, 
     selectedCard, 
     isGenerating, 
+    isDealing,
     drawCount,
+    autoMoveEnabled,
     startNewGame, 
     changeDrawCount, 
+    toggleAutoMove,
     drawCard, 
     handleCardClick, 
     handleEmptyTableauClick 
@@ -35,27 +39,25 @@ function App() {
   const renderWastePile = () => {
       if (gameState.waste.length === 0) return null;
 
-      // In Draw 3 mode, we might want to see the last 3 cards if possible, 
-      // but only the very top one is clickable.
-      // Standard Solitaire visuals: 
-      // - Top card (visible, clickable)
-      // - Card underneath (partially visible, not clickable)
-      // - Card underneath that (partially visible, not clickable)
-      
       const visibleCount = 3;
       const startIndex = Math.max(0, gameState.waste.length - visibleCount);
       const visibleWaste = gameState.waste.slice(startIndex);
 
       return (
           <div className="relative w-20 h-28">
+              <AnimatePresence>
               {visibleWaste.map((card, idx) => {
                   const isTopCard = idx === visibleWaste.length - 1;
                   const offset = idx * 12; // 12px offset for fanning
                   return (
-                      <div 
+                      <motion.div 
                           key={card.id} 
-                          className="absolute top-0 left-0 transition-all duration-200"
-                          style={{ left: `${offset}px`, zIndex: idx }}
+                          className="absolute top-0 left-0"
+                          style={{ zIndex: idx }}
+                          initial={{ x: -100, opacity: 0 }}
+                          animate={{ x: offset, opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
                       >
                           <CardComponent 
                               card={card}
@@ -66,13 +68,12 @@ function App() {
                                   }
                               }}
                               isSelected={isTopCard && selectedCard?.card.id === card.id}
-                              // Only pointer-events-auto for top card if we want to be strict with CSS, 
-                              // but onClick check above handles logic.
                               className={!isTopCard ? "brightness-90" : ""}
                           />
-                      </div>
+                      </motion.div>
                   );
               })}
+              </AnimatePresence>
           </div>
       );
   };
@@ -84,6 +85,12 @@ function App() {
           <h1 className="text-3xl font-bold tracking-wider text-yellow-100 shadow-sm">Solitaire</h1>
           
           <div className="flex gap-4 items-center">
+              {/* Auto Move Toggle */}
+              <div className="flex items-center gap-2 text-sm bg-green-800 rounded px-2 py-1 border border-green-600 cursor-pointer" onClick={toggleAutoMove}>
+                  <div className={`w-3 h-3 rounded-full ${autoMoveEnabled ? 'bg-green-400 shadow-[0_0_5px_rgba(74,222,128,0.8)]' : 'bg-gray-600'}`}></div>
+                  <span className="text-green-200">Auto Move</span>
+              </div>
+
               {/* Draw Count Dropdown */}
               <div className="flex items-center gap-2 text-sm bg-green-800 rounded px-2 py-1 border border-green-600">
                   <label htmlFor="drawCount" className="text-green-200">Draw:</label>
@@ -111,16 +118,12 @@ function App() {
 
         {/* Top Section: Stock, Waste, Foundations */}
         <div className="flex justify-between mb-8 gap-4">
-          <div className="flex gap-8"> {/* Increased gap to accommodate fanned waste */}
+          <div className="flex gap-8">
             {/* Stock */}
             <div onClick={drawCard} className="relative w-20 h-28 cursor-pointer">
                {gameState.stock.length > 0 ? (
                  <div className="w-20 h-28 bg-blue-800 rounded-lg border-2 border-white shadow-md flex items-center justify-center">
                     <div className="w-16 h-24 border border-blue-600 rounded opacity-50 bg-pattern"></div>
-                    {/* Draw count indicator overlay */}
-                    <div className="absolute -top-2 -right-2 bg-yellow-500 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow">
-                        {drawCount}
-                    </div>
                  </div>
                ) : (
                  <div className="w-20 h-28 border-2 border-green-700 rounded-lg flex items-center justify-center text-green-700 font-bold text-2xl">↺</div>
@@ -128,7 +131,7 @@ function App() {
             </div>
 
             {/* Waste */}
-            <div className="relative w-20 h-28 min-w-[7rem]"> {/* Min width to reserve space for fan */}
+            <div className="relative w-20 h-28 min-w-[7rem]">
                {renderWastePile()}
             </div>
           </div>
@@ -178,11 +181,30 @@ function App() {
                    <div className="w-20 h-28 border border-green-700 rounded-lg bg-green-900 bg-opacity-10 absolute top-0 left-0"></div>
                )}
 
+               <AnimatePresence>
                {pile.map((card, cardIndex) => (
-                 <div 
+                 <motion.div 
                     key={card.id} 
                     className="absolute" 
-                    style={{ top: `${cardIndex * 1.5}rem` }}
+                    style={{ zIndex: cardIndex }}
+                    initial={isDealing ? { 
+                        x: -200 + (pileIndex * -50), // Start from roughly top left (stock area)
+                        y: -200, 
+                        opacity: 0,
+                        scale: 0.5
+                    } : false}
+                    animate={{ 
+                        x: 0, 
+                        y: cardIndex * 24, // 1.5rem = 24px
+                        opacity: 1,
+                        scale: 1 
+                    }}
+                    transition={{ 
+                        delay: isDealing ? (pileIndex * 0.1) + (cardIndex * 0.05) : 0,
+                        type: "spring",
+                        stiffness: 200,
+                        damping: 25
+                    }}
                  >
                    <CardComponent 
                       card={card}
@@ -191,8 +213,9 @@ function App() {
                       }}
                       isSelected={selectedCard?.card.id === card.id}
                    />
-                 </div>
+                 </motion.div>
                ))}
+               </AnimatePresence>
             </div>
           ))}
         </div>

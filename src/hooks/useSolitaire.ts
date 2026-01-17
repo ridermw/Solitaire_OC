@@ -22,6 +22,10 @@ export const useSolitaire = () => {
   const [selectedCard, setSelectedCard] = useState<{ card: Card, source: string, index?: number } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [drawCount, setDrawCount] = useState<1 | 3>(1);
+  const [autoMoveEnabled, setAutoMoveEnabled] = useState(false);
+  
+  // Animation state for dealing
+  const [isDealing, setIsDealing] = useState(false);
 
   useEffect(() => {
     startNewGame();
@@ -29,6 +33,7 @@ export const useSolitaire = () => {
 
   const startNewGame = async (overrideDrawCount?: 1 | 3) => {
     setIsGenerating(true);
+    setIsDealing(true); // Start deal animation flag
     const count = overrideDrawCount ?? drawCount;
 
     // Use setTimeout to allow UI to render loading state if needed
@@ -53,12 +58,20 @@ export const useSolitaire = () => {
         setGameState(winnableGame);
         setSelectedCard(null);
         setIsGenerating(false);
+        
+        // End dealing animation after a short delay (simulating card distribution visual time)
+        // In a real physics animation we would wait for callbacks, but here we just use state for now
+        setTimeout(() => setIsDealing(false), 1000); 
     }, 10);
   };
 
   const changeDrawCount = (newCount: 1 | 3) => {
       setDrawCount(newCount);
       startNewGame(newCount);
+  };
+
+  const toggleAutoMove = () => {
+      setAutoMoveEnabled(prev => !prev);
   };
 
   const drawCard = () => {
@@ -98,6 +111,19 @@ export const useSolitaire = () => {
     // If card is from stock (and facedown), ignore (drawCard handles clicks on stock pile itself)
     if (source === 'stock') return;
 
+    if (autoMoveEnabled) {
+         // Try to find a valid move immediately
+         if (attemptAutoMove({ card, source, index })) {
+             setSelectedCard(null); // Clear selection if moved
+             return;
+         }
+         // If no move found, fall through to selection logic (or do nothing? User said "If there are no valid moves, it will go nowhere.")
+         // "Go nowhere" implies we might not even select it? Or just that it doesn't move?
+         // Usually auto-move acts as a "double click" or "smart click". If it can't move, it often selects it for manual moving.
+         // Let's stick to strict interpretation: "it will go nowhere". But standard UX is to select it if it can't move.
+         // Let's try to select it if it can't move, so manual move is possible.
+    }
+
     if (!selectedCard) {
       // Select card if valid source
       if (source === 'waste' || source.startsWith('tableau') || source.startsWith('foundation')) {
@@ -111,6 +137,46 @@ export const useSolitaire = () => {
         attemptMove(selectedCard, { source, index });
       }
     }
+  };
+
+  const attemptAutoMove = (from: { card: Card, source: string, index?: number }): boolean => {
+      // Priority 1: Move to Foundation
+      const suit = from.card.suit;
+      const foundationPile = gameState.foundations[suit];
+      const targetRankVal = foundationPile.length > 0 ? getRankValue(foundationPile[foundationPile.length - 1].rank) : 0;
+      
+      if (getRankValue(from.card.rank) === targetRankVal + 1) {
+          executeMove(from, { source: `foundation-${suit}` });
+          return true;
+      }
+
+      // Priority 2: Move to Tableau
+      // Scan all tableau piles for a valid spot
+      // IMPORTANT: Don't move a King from an empty tableau slot to another empty tableau slot (useless loop)
+      // Check if current spot is already bottom of a tableau pile?
+      const isKing = from.card.rank === 'K';
+      
+      for (let i = 0; i < 7; i++) {
+          const pile = gameState.tableau[i];
+          if (pile.length === 0) {
+              if (isKing) {
+                   // Only move King to empty spot if it's NOT already in an empty spot (e.g. at base of another pile)
+                   // If source is tableau and index is 0, it's already at base.
+                   if (from.source.startsWith('tableau') && from.index === 0) continue;
+                   
+                   executeMove(from, { source: `tableau-${i}` });
+                   return true;
+              }
+          } else {
+              const targetCard = pile[pile.length - 1];
+              if (isOppositeColor(from.card, targetCard) && getRankValue(from.card.rank) === getRankValue(targetCard.rank) - 1) {
+                  executeMove(from, { source: `tableau-${i}` });
+                  return true;
+              }
+          }
+      }
+
+      return false;
   };
 
   const attemptMove = (
@@ -153,6 +219,9 @@ export const useSolitaire = () => {
   };
   
   const handleEmptyTableauClick = (tableauIndex: number) => {
+      // If AutoMove is on, clicking empty space doesn't make sense for "auto moving" anything *to* it
+      // unless we had a card selected previously (manual mode override).
+      // So standard selection logic applies.
       if (selectedCard && selectedCard.card.rank === 'K') {
           executeMove(selectedCard, { source: `tableau-${tableauIndex}` });
       }
@@ -212,9 +281,12 @@ export const useSolitaire = () => {
     gameState,
     selectedCard,
     isGenerating,
+    isDealing,
     drawCount,
+    autoMoveEnabled,
     startNewGame,
     changeDrawCount,
+    toggleAutoMove,
     drawCard,
     handleCardClick,
     handleEmptyTableauClick,

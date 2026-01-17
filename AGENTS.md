@@ -1,77 +1,86 @@
 # Agentic Guidelines
 
-This file contains instructions and context for AI coding agents operating in this repository.
+Instructions and context for AI coding agents working in this repository.
 
-## 1. Project Context
-- **Type:** Single-page Web Application (React + Vite)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS (v4)
-- **State Management:** Local React State (`useState`, `useReducer` recommended for complex game logic)
-- **Key Directories:**
-  - `src/components`: UI components (visual only, avoid heavy logic)
-  - `src/hooks`: Custom hooks for game logic
+## Project Context
+
+- Type: Single-page web application (React + Vite)
+- Language: TypeScript
+- Styling: Tailwind CSS (v4)
+- State: Local React state (`useState`, `useReducer` for complex logic)
+- Key directories:
+  - `src/components`: UI components (visual only)
+  - `src/hooks`: Game logic hooks
   - `src/types`: TypeScript interfaces and types
-  - `src/utils`: Helper functions (pure functions preferred)
+  - `src/utils`: Pure helper functions
 
-## 2. Build & Verification Commands
+## Build and Verification
+
 Always verify changes before submitting.
 
-- **Start Dev Server:** `npm run dev`
-- **Build Production:** `npm run build`
-  - *Note:* This runs `tsc -b` (Type check) followed by `vite build`.
-  - **CRITICAL:** Ensure `npm run build` passes. It is the primary correctness check.
-- **Linting:** `npm run lint` (ESLint)
-- **Type Checking (Standalone):** `npx tsc --noEmit`
+- Dev server: `npm run dev`
+- Build: `npm run build` (runs `tsc -b` then `vite build`)
+- Lint: `npm run lint`
+- Type check: `npx tsc --noEmit`
 
-### Running Tests
-- **Framework:** Vitest (configured).
-- **Run:** `npm test`
-- **Requirement:** All new features and bug fixes MUST include corresponding unit tests.
-- **Regression:** Run full suite before submitting changes to ensure no regressions.
+### Tests
 
-## 3. Code Style & Conventions
+- Framework: Vitest
+- Run: `npm test`
+- Requirement: New features and bug fixes must include tests
+- Regression: Run the full suite before submitting
+
+## Code Style and Conventions
 
 ### Imports
-- **Grouping:** 
-  1. React/External libraries
+
+- Grouping order:
+  1. React/external libraries
   2. Internal absolute/relative imports
-  3. Styles (if not using Tailwind classes exclusively)
-- **Type Imports:** ALWAYS use `import type { Foo }` for interfaces/types.
-  - *Why:* `verbatimModuleSyntax` is enabled in `tsconfig.json`.
+  3. Styles (if not using Tailwind utility classes exclusively)
+- Types: Always use `import type { Foo }` for interfaces and types
 
 ### TypeScript
-- **Strictness:** Strict mode is enabled. No `any`.
-- **Interfaces vs Types:** Use `interface` for object definitions (props, state), `type` for unions/aliases.
-- **Props:** Define component props as `interface ComponentProps { ... }`.
 
-### Components (React)
-- **Functional Components:** Use `const Component: React.FC<Props> = ...` or `function Component({ prop }: Props)`.
-- **Hooks:** Extract complex logic (especially game rules) into custom hooks (e.g., `useSolitaire`).
-- **Rendering:** Avoid inline function definitions in JSX if they cause re-render issues, but premature optimization is not required.
+- Strict mode enabled; no `any`
+- Use `interface` for object shapes (props, state)
+- Use `type` for unions or aliases
+- Props should be defined with `interface ComponentProps { ... }`
 
-### Styling (Tailwind CSS)
-- **Utility First:** Use Tailwind utility classes directly in `className`.
-- **Colors:** Use the extended palette in `tailwind.config.js` (e.g., `bg-felt-green`).
-- **Responsive:** Mobile-first approach is not strictly enforced for this desktop-centric game layout, but ensure layout doesn't break on resize.
+### React
 
-### Naming Conventions
-- **Files:** PascalCase for React components (`Card.tsx`), camelCase for utilities/hooks (`cardUtils.ts`).
-- **Variables:** camelCase (`const deck = ...`).
-- **Constants:** UPPER_CASE for static configuration (`const SUITS = ...`).
-- **Types:** PascalCase (`interface GameState`).
+- Use functional components
+- Extract complex game logic into hooks (e.g., `useSolitaire`)
+- Avoid inline JSX functions if they cause performance issues
 
-## 4. Error Handling
-- **UI:** Fail gracefully. If game state is invalid, show an error boundary or reset game button.
-- **Logic:** Use explicit return types. Avoid throwing errors in game logic paths; prefer returning `false` or `null` for invalid moves.
+### Tailwind CSS
 
-## 5. Specific Rules for Solitaire Logic
-- **Immutability:** Game state updates must be immutable. Use spread syntax `...` or `structuredClone` (if supported environment).
-- **Deck Management:** Cards are objects with `{ id, suit, rank, isFaceUp }`.
-- **Validation:** Move validation logic should reside in `src/hooks` or `src/utils`, not in UI components.
+- Prefer utility classes in `className`
+- Use the extended palette in `tailwind.config.js`
+- Ensure layout holds on window resize
 
-## 6. Git & Commit Protocol
-- **Commits:** Conventional Commits style (e.g., `feat: add shuffle logic`, `fix: card overlap issue`).
-- **Safety:** Do not force push.
+### Naming
+
+- Files: PascalCase for components, camelCase for hooks/utils
+- Variables: camelCase
+- Constants: UPPER_CASE for static configuration
+- Types: PascalCase
+
+## Error Handling
+
+- UI: Fail gracefully; show error boundary or reset option
+- Logic: Return `false` or `null` for invalid moves; avoid throwing
+
+## Solitaire Logic Rules
+
+- Immutability: Use spread syntax or `structuredClone`
+- Cards: `{ id, suit, rank, isFaceUp }`
+- Validation: Keep move checks in `src/hooks` or `src/utils`
+
+## Git and Commit Protocol
+
+- Use Conventional Commits (e.g., `feat: add shuffle logic`)
+- Do not force push
 
 ---
-*Generated by opencode*
+Generated by opencode

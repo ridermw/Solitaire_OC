@@ -1,71 +1,85 @@
 # Solitaire (Klondike)
 
-A modern, responsive web implementation of the classic Klondike Solitaire card game, built with React, TypeScript, and Tailwind CSS.
+A modern, responsive Klondike Solitaire game built with React, TypeScript, and Tailwind CSS.
 
 ![Solitaire Preview](https://placehold.co/800x400/35654d/white?text=Solitaire+Preview)
 
-## 🎮 Features
+## Features
 
-- **Classic Rules:** Full implementation of Klondike Solitaire logic.
-- **Responsive Design:** Works on desktop and mobile devices.
-- **Modern Tech Stack:** Built with the latest React 19, TypeScript, and Vite.
-- **Beautiful UI:** Felt-green aesthetic using Tailwind CSS.
-- **No Assets:** All card visuals are CSS and Unicode-based (lightweight).
+- Classic Klondike rules with full move validation.
+- Undo support for stepping back through moves.
+- Win celebration overlay with animated confetti.
+- Synthesized sound effects for shuffle, flip, move, and win.
+- Felt-green table UI with CSS-only card visuals.
+- Responsive layout for desktop and mobile.
 
-## 🚀 Getting Started
+## How to Play
+
+- Click the stock to draw cards to the waste.
+- Click a face-up card to select it, then click a destination to move.
+- Drag and drop face-up cards onto valid piles.
+- Use the Auto Move toggle to send cards to foundations automatically.
+- Use Undo to revert the last move.
+- Changing the draw count starts a new winnable game.
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18 or higher)
+- Node.js 18+
 - npm
 
 ### Installation
 
-1.  Clone the repository:
-    ```bash
-    git clone <repository-url>
-    cd <repository-directory>
-    ```
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd <repository-directory>
+   ```
 
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-3.  Start the development server:
-    ```bash
-    npm run dev
-    ```
+3. Start the dev server:
+   ```bash
+   npm run dev
+   ```
 
-4.  Open your browser and navigate to `http://localhost:5173`.
+4. Open `http://localhost:5173` in your browser.
 
-## 🛠️ Build & Test
+## Scripts
 
-- **Build for production:**
-    ```bash
-    npm run build
-    ```
-    This runs TypeScript type checking (`tsc -b`) followed by Vite's build process.
+- Build for production:
+  ```bash
+  npm run build
+  ```
+- Run tests:
+  ```bash
+  npm test
+  ```
+- Lint the project:
+  ```bash
+  npm run lint
+  ```
 
-- **Linting:**
-    ```bash
-    npm run lint
-    ```
+## Project Structure
 
-## 📂 Project Structure
-
-- `src/components`: UI components (e.g., `Card.tsx`).
-- `src/hooks`: Game logic and state management (`useSolitaire.ts`).
+- `src/components`: UI components (visual presentation).
+- `src/hooks`: Game logic and state management.
 - `src/types`: TypeScript interfaces (`Card`, `GameState`).
-- `src/utils`: Helper functions (`cardUtils.ts`).
+- `src/utils`: Pure helpers for rules, logging, and audio.
 
-## 🧩 Tech Stack
+## Tech Stack
 
-- **Framework:** [React](https://react.dev/)
-- **Build Tool:** [Vite](https://vitejs.dev/)
-- **Language:** [TypeScript](https://www.typescriptlang.org/)
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- Framer Motion
+- Vitest
 
-## 📝 License
+## License
 
 MIT

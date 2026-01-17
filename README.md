@@ -1,5 +1,7 @@
 # Solitaire (Klondike)
 
+[![Deploy to GitHub Pages](https://github.com/ridermw/Solitaire_OC/actions/workflows/deploy.yml/badge.svg)](https://github.com/ridermw/Solitaire_OC/actions/workflows/deploy.yml)
+
 A modern, responsive Klondike Solitaire game built with React, TypeScript, and Tailwind CSS.
 
 ![Solitaire Preview](https://placehold.co/800x400/35654d/white?text=Solitaire+Preview)

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useSolitaire } from './useSolitaire';
+import { cloneGameState } from '../utils/cloneGameState';
+import type { Card, GameState, Rank, Suit } from '../types/game';
 
-// Mock the audio utils
 vi.mock('../utils/audio', () => ({
   playCardFlipSound: vi.fn(),
   playMoveSound: vi.fn(),
@@ -10,10 +11,72 @@ vi.mock('../utils/audio', () => ({
   playShuffleSound: vi.fn(),
 }));
 
+let dealState: GameState;
+
+vi.mock('../utils/gameLogic', () => ({
+  dealNewGame: vi.fn(() => cloneGameState(dealState)),
+}));
+
+vi.mock('../utils/solver', () => ({
+  isGameWinnable: vi.fn(() => true),
+}));
+
+type HookResult = { current: ReturnType<typeof useSolitaire> | null };
+type HookCondition = (state: ReturnType<typeof useSolitaire>) => boolean;
+
+const makeCard = (rank: Rank, suit: Suit, isFaceUp = false, idSuffix = ''): Card => ({
+  id: `${rank}-${suit}${idSuffix}`,
+  suit,
+  rank,
+  isFaceUp,
+});
+
+const baseStateFactory = (): GameState => ({
+  stock: [
+    makeCard('A', 'hearts'),
+    makeCard('2', 'hearts'),
+    makeCard('3', 'hearts'),
+    makeCard('4', 'hearts'),
+    makeCard('5', 'hearts'),
+    makeCard('6', 'hearts'),
+    makeCard('7', 'hearts'),
+    makeCard('8', 'hearts'),
+    makeCard('9', 'hearts'),
+    makeCard('10', 'hearts'),
+  ],
+  waste: [],
+  foundations: {
+    hearts: [],
+    diamonds: [],
+    clubs: [],
+    spades: [],
+  },
+  tableau: [[], [], [], [], [], [], []],
+  score: 0,
+});
+
+const setDealState = (state: GameState) => {
+  dealState = cloneGameState(state);
+};
+
+const waitForGeneration = async (result: HookResult, condition?: HookCondition) => {
+  await act(async () => {
+    for (let i = 0; i < 40; i += 1) {
+      if (result.current && !result.current.isGenerating) {
+        if (!condition || condition(result.current)) {
+          return;
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  });
+};
+
 describe('useSolitaire', () => {
   it('should initialize with default state', () => {
+    setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
-    
+
     expect(result.current.gameState).toBeDefined();
     expect(result.current.selectedCard).toBeNull();
     expect(result.current.drawCount).toBe(3);
@@ -21,33 +84,31 @@ describe('useSolitaire', () => {
   });
 
   it('should eventually finish generating', async () => {
+    setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
-    
-    // The hook starts generating on mount
-    // Wait for it to finish (with timeout)
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    });
-    
-    // By this point it should have generated a game (or still be generating)
-    expect(typeof result.current.isGenerating).toBe('boolean');
+
+    await waitForGeneration(result);
+
+    expect(result.current.isGenerating).toBe(false);
   });
 
   it('should toggle auto move', () => {
+    setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
-    
+
     const initialAutoMove = result.current.autoMoveEnabled;
-    
+
     act(() => {
       result.current.toggleAutoMove();
     });
-    
+
     expect(result.current.autoMoveEnabled).toBe(!initialAutoMove);
   });
 
   it('should have all required methods', () => {
+    setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
-    
+
     expect(typeof result.current.startNewGame).toBe('function');
     expect(typeof result.current.changeDrawCount).toBe('function');
     expect(typeof result.current.toggleAutoMove).toBe('function');
@@ -58,14 +119,16 @@ describe('useSolitaire', () => {
   });
 
   it('should initialize with empty waste pile', () => {
+    setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
-    
+
     expect(result.current.gameState.waste).toEqual([]);
   });
 
   it('should initialize with empty foundations', () => {
+    setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
-    
+
     expect(result.current.gameState.foundations.hearts).toEqual([]);
     expect(result.current.gameState.foundations.diamonds).toEqual([]);
     expect(result.current.gameState.foundations.clubs).toEqual([]);
@@ -73,121 +136,135 @@ describe('useSolitaire', () => {
   });
 
   it('should increment gameKey when starting a new game', async () => {
+    setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
-    
+
     const initialKey = result.current.gameKey;
-    
-    // Wrap in act and wait for the async startNewGame to complete
-    // NOTE: startNewGame contains internal timeouts/loops for searching for a winnable game,
-    // so it might take time. However, gameKey is updated synchronously at the START of the function.
-    // The test timeout suggests we are waiting for the promise to resolve, which waits for the generator loop.
-    // We only care about the synchronous update for this test.
-    
+
     await act(async () => {
-       // We don't await the promise here to avoid the timeout of the full generation loop
-       // We just trigger it.
-       result.current.startNewGame();
+      result.current.startNewGame();
     });
-    
+
     expect(result.current.gameKey).toBeGreaterThan(initialKey);
   });
 
-  // Helper to wait for game generation
-  const waitForGameGeneration = async (result: any) => {
-    // Increase timeout significantly for slow environments
-    // We poll every 100ms up to 10 seconds
-    const maxTries = 100;
-    
-    await act(async () => {
-        for (let i = 0; i < maxTries; i++) {
-             // Check if hook is mounted and state is available
-             // We need stock to have cards to perform moves
-             if (result.current && !result.current.isGenerating && result.current.gameState.stock.length > 0) {
-                 return;
-             }
-             await new Promise(r => setTimeout(r, 100));
-        }
-    });
-  };
+  it('should undo last move', async () => {
+    const base = baseStateFactory();
+    base.stock = [];
+    base.tableau[0] = [makeCard('K', 'spades', true, '-0')];
 
-  it.skip('should undo last move', async () => {
+    setDealState(base);
     const { result } = renderHook(() => useSolitaire());
 
-    await waitForGameGeneration(result);
-    
-    // Check if generation succeeded
-    if (result.current.gameState.stock.length === 0) {
-        console.warn('Skipping undo test due to generation timeout');
-        return;
-    }
-    
-    // Capture initial state
-    const initialStateWithCards = result.current.gameState;
+    await waitForGeneration(result, state => state.gameState.tableau[0].length === 1);
 
-    // Perform a move (draw card)
-    await act(async () => {
-      result.current.drawCard();
+    act(() => {
+      result.current.toggleAutoMove();
     });
 
-    const stateAfterMove = result.current.gameState;
-    
-    // Ensure move actually changed state (it might recycle if stock was empty, but we checked for >0)
-    expect(stateAfterMove).not.toEqual(initialStateWithCards);
+    const initialState = cloneGameState(result.current.gameState);
+
+    act(() => {
+      const card = result.current.gameState.tableau[0][0];
+      result.current.handleCardClick(card, 'tableau-0', 0);
+    });
+
+    act(() => {
+      result.current.handleEmptyTableauClick(1);
+    });
+
+    expect(result.current.gameState.tableau[1].length).toBe(1);
     expect(result.current.canUndo).toBe(true);
 
-    // Undo
     act(() => {
       result.current.undo();
     });
 
-    expect(result.current.gameState).toEqual(initialStateWithCards);
+    expect(result.current.gameState).toEqual(initialState);
     expect(result.current.canUndo).toBe(false);
-  }, 60000); 
+  });
 
-  it.skip('should support n-level undo', async () => {
+  it('should support n-level undo', async () => {
+    const base = baseStateFactory();
+    base.stock = [];
+    base.tableau[0] = [makeCard('K', 'spades', true, '-0')];
+
+    setDealState(base);
     const { result } = renderHook(() => useSolitaire());
 
-    await waitForGameGeneration(result);
-    
-    if (result.current.gameState.stock.length < 6) {
-         console.warn('Skipping n-level undo test due to insufficient stock');
-         return;
-    }
+    await waitForGeneration(result, state => state.gameState.tableau[0].length === 1);
 
-    const state0 = result.current.gameState;
-
-    // Move 1
-    await act(async () => {
-      result.current.drawCard();
+    act(() => {
+      result.current.toggleAutoMove();
     });
-    const state1 = result.current.gameState;
 
-    // Wait a bit to ensure state updates propagate if needed
-    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    const state0 = cloneGameState(result.current.gameState);
 
-    // Move 2
-    await act(async () => {
-      result.current.drawCard();
+    act(() => {
+      const card = result.current.gameState.tableau[0][0];
+      result.current.handleCardClick(card, 'tableau-0', 0);
     });
-    const state2 = result.current.gameState;
 
-    // Basic check that moves did something (stock decreased)
-    expect(state1.stock.length).toBeLessThan(state0.stock.length);
-    expect(state2.stock.length).toBeLessThan(state1.stock.length);
+    act(() => {
+      result.current.handleEmptyTableauClick(1);
+    });
 
-    expect(state2).not.toEqual(state1);
-    expect(state1).not.toEqual(state0);
+    const state1 = cloneGameState(result.current.gameState);
 
-    // Undo Move 2
+    act(() => {
+      const card = result.current.gameState.tableau[1][0];
+      result.current.handleCardClick(card, 'tableau-1', 0);
+    });
+
+    act(() => {
+      result.current.handleEmptyTableauClick(2);
+    });
+
+    const state2 = cloneGameState(result.current.gameState);
+
+    expect(state1.tableau[1].length).toBe(1);
+    expect(state2.tableau[2].length).toBe(1);
+
     act(() => {
       result.current.undo();
     });
     expect(result.current.gameState).toEqual(state1);
 
-    // Undo Move 1
     act(() => {
       result.current.undo();
     });
     expect(result.current.gameState).toEqual(state0);
-  }, 30000);
+  });
+
+  it('should select a tableau run and move it together', async () => {
+    const base = baseStateFactory();
+    base.stock = [];
+    base.tableau[0] = [
+      makeCard('K', 'spades', true, '-0'),
+      makeCard('Q', 'hearts', true, '-0'),
+      makeCard('J', 'clubs', true, '-0'),
+    ];
+    base.tableau[2] = [makeCard('K', 'clubs', true, '-2')];
+
+    setDealState(base);
+    const { result } = renderHook(() => useSolitaire());
+
+    await waitForGeneration(result, state => state.gameState.tableau[0].length > 1);
+
+    const selectedCard = result.current.gameState.tableau[0][1];
+
+    act(() => {
+      result.current.handleCardClick(selectedCard, 'tableau-0', 1);
+    });
+
+    expect(result.current.selectedCard?.card.rank).toBe('Q');
+
+    act(() => {
+      const targetCard = result.current.gameState.tableau[2][0];
+      result.current.handleCardClick(targetCard, 'tableau-2', 0);
+    });
+
+    expect(result.current.gameState.tableau[0].length).toBe(1);
+    expect(result.current.gameState.tableau[2].map(card => card.rank)).toEqual(['K', 'Q', 'J']);
+  });
 });

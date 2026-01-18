@@ -191,7 +191,12 @@ export const useSolitaire = () => {
     // If card is from stock (and facedown), ignore (drawCard handles clicks on stock pile itself)
     if (source === 'stock') return;
 
-    if (autoMoveEnabled) {
+    const isTableauSource = source.startsWith('tableau');
+    const isTopTableauCard = isTableauSource
+      ? index === gameState.tableau[parseInt(source.split('-')[1])].length - 1
+      : true;
+
+    if (autoMoveEnabled && isTopTableauCard) {
          // Try to find a valid move immediately
          if (attemptAutoMove({ card, source, index })) {
              setSelectedCard(null); // Clear selection if moved

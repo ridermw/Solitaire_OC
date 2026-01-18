@@ -2,7 +2,7 @@
 
 ## Architecture and Code Quality
 
-- [ ] Split `src/App.tsx` into smaller components (TopBar, StockWaste, FoundationRow, TableauRow, DrawCountModal). Why: reduces mixed concerns and improves testability and reuse.
+- [x] Split `src/App.tsx` into smaller components (TopBar, StockWaste, FoundationRow, TableauRow, DrawCountModal). Why: reduces mixed concerns and improves testability and reuse.
 - [ ] Replace `document.elementFromPoint` drop logic with a dedicated DnD layer or ref-based drop zone registry. Why: current DOM querying is brittle, hard to test, and inaccessible.
 - [x] Extract a shared `cloneGameState` utility (used by hook and solver). Why: avoids duplicated clone logic and keeps state copying consistent.
 - [x] Make deck/card updates immutable in `src/utils/gameLogic.ts` (avoid mutating `card.isFaceUp`). Why: mutation can cause subtle bugs when references are reused.
@@ -23,8 +23,11 @@
 - [ ] Re-enable skipped undo tests in `src/hooks/useSolitaire.test.ts` after mocking or stabilizing generation. Why: coverage for undo behavior is currently disabled.
 - [x] Fix `src/components/Card.test.tsx` assertions to match actual class usage. Why: tests should reflect real rendering classes or use semantic queries.
 - [ ] Add integration tests for draw, move, auto-move, and undo in `src/App.test.tsx`. Why: core interactions are not covered today.
+- [ ] Silence AudioContext warning in `src/App.test.tsx` by mocking audio or gating audio init. Why: tests emit noisy console warnings.
 
 ## Config and Maintenance
 
 - [ ] Align Tailwind version documentation with `package.json`. Why: repo docs and dependencies should match.
 - [ ] Remove unused default Vite CSS from `src/App.css` if not needed. Why: reduce confusion and avoid unexpected styling conflicts.
+- [ ] Add semantic versioning policy and update `package.json` for every commit/PR. Why: ensure releases are tracked and UI shows current version.
+- [ ] Bump `package.json` on every commit pushed to main: `0.1.<commit count>` (e.g., 19 commits -> 0.1.19). Why: keep UI version aligned with repo history.

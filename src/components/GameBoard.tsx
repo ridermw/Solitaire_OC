@@ -11,6 +11,7 @@ interface GameBoardProps {
   tableau: Card[][];
   selectedCardId?: string;
   isDealing: boolean;
+  isGenerating: boolean;
   onDrawCard: () => void;
   onCardClick: (card: Card, source: string, index?: number) => void;
   onEmptyTableauClick: (pileIndex: number) => void;
@@ -25,6 +26,7 @@ export const GameBoard = ({
   tableau,
   selectedCardId,
   isDealing,
+  isGenerating,
   onDrawCard,
   onCardClick,
   onEmptyTableauClick,
@@ -47,7 +49,11 @@ export const GameBoard = ({
     <div>
       <div className="flex justify-between mb-8 gap-4">
         <div className="flex gap-8">
-          <StockPile hasStock={stockCount > 0} onDraw={onDrawCard} />
+          <StockPile
+            hasStock={stockCount > 0}
+            onDraw={onDrawCard}
+            isDisabled={isGenerating || (stockCount === 0 && waste.length === 0)}
+          />
           <WastePile
             waste={waste}
             selectedCardId={selectedCardId}

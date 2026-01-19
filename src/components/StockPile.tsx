@@ -1,10 +1,14 @@
 interface StockPileProps {
   hasStock: boolean;
   onDraw: () => void;
+  isDisabled?: boolean;
 }
 
-export const StockPile = ({ hasStock, onDraw }: StockPileProps) => (
-  <div onClick={onDraw} className="relative w-24 h-36 cursor-pointer">
+export const StockPile = ({ hasStock, onDraw, isDisabled = false }: StockPileProps) => (
+  <div
+    onClick={isDisabled ? undefined : onDraw}
+    className={`relative w-24 h-36 ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+  >
     {hasStock ? (
       <div className="w-24 h-36 bg-blue-800 rounded-lg border-2 border-white shadow-md flex items-center justify-center">
         <div className="w-20 h-32 border border-blue-600 rounded opacity-50 bg-pattern"></div>

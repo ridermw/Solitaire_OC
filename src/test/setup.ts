@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
 
 class MockAudioContext {
   createBuffer() {
@@ -44,3 +45,25 @@ class MockAudioContext {
 }
 
 globalThis.AudioContext = MockAudioContext as unknown as typeof AudioContext;
+
+const initialDeckId = 'YgTeTWlD0ouYaz0Pdva1TWtEvDm2ycsFlYIBAA==';
+
+globalThis.fetch = vi.fn(async () => ({
+  json: async () => [initialDeckId],
+})) as unknown as typeof fetch;
+
+class MockWorker {
+  onmessage: ((event: MessageEvent<{ deckId: string | null }>) => void) | null = null;
+
+  postMessage() {
+    setTimeout(() => {
+      this.onmessage?.({ data: { deckId: initialDeckId } } as MessageEvent<{ deckId: string | null }>);
+    }, 0);
+  }
+
+  terminate() {
+    return undefined;
+  }
+}
+
+globalThis.Worker = MockWorker as unknown as typeof Worker;

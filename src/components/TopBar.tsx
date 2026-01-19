@@ -5,6 +5,10 @@ interface TopBarProps {
   toggleAutoMove: () => void;
   drawCount: 1 | 3;
   isGenerating: boolean;
+  isNextDeckReady: boolean;
+  deckId: string;
+  onDeckIdChange: (value: string) => void;
+  onLoadDeck: () => void;
   onDrawCountChange: (newCount: 1 | 3) => void;
   startNewGame: () => void;
   undo: () => void;
@@ -16,6 +20,10 @@ export const TopBar = ({
   toggleAutoMove,
   drawCount,
   isGenerating,
+  isNextDeckReady,
+  deckId,
+  onDeckIdChange,
+  onLoadDeck,
   onDrawCountChange,
   startNewGame,
   undo,
@@ -56,14 +64,34 @@ export const TopBar = ({
           </select>
         </div>
 
+        <div className="flex items-center gap-2 text-sm bg-green-800 rounded px-2 py-1 border border-green-600">
+          <label htmlFor="deckId" className="text-green-200">Deck:</label>
+          <input
+            id="deckId"
+            value={deckId}
+            onChange={(event) => onDeckIdChange(event.target.value)}
+            disabled={isGenerating}
+            className="bg-green-900 text-white rounded px-2 py-1 outline-none border border-green-700 w-48"
+          />
+          <button
+            onClick={onLoadDeck}
+            disabled={isGenerating || !deckId}
+            className={`px-3 py-1 bg-green-700 hover:bg-green-600 text-white rounded border border-green-500 transition-colors ${
+              isGenerating || !deckId ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            Load Deck
+          </button>
+        </div>
+
         <button
           onClick={startNewGame}
-          disabled={isGenerating}
+          disabled={isGenerating || !isNextDeckReady}
           className={`px-4 py-2 bg-green-800 hover:bg-green-700 text-white rounded border border-green-600 shadow-lg transition-colors flex items-center ${
-            isGenerating ? 'opacity-50 cursor-not-allowed' : ''
+            isGenerating || !isNextDeckReady ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
-          {isGenerating ? 'Dealing...' : 'New Game'}
+          {isGenerating ? 'Dealing...' : isNextDeckReady ? 'New Game' : 'Finding Deck...'}
         </button>
 
         <button

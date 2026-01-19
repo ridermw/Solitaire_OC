@@ -175,24 +175,30 @@ describe('useSolitaire', () => {
   });
 
   it('handles invalid deck id', async () => {
-    solverMocks.decodeDeckId.mockImplementationOnce(() => {
-      throw new Error('bad id');
-    });
-
     setDealState(baseStateFactory());
     const { result } = renderHook(() => useSolitaire());
 
     await waitForGeneration(result);
+    await waitForDeckReady(result);
+
+    // Mock decodeDeckId to throw AFTER initial generation completes
+    solverMocks.decodeDeckId.mockImplementationOnce(() => {
+      throw new Error('bad id');
+    });
 
     act(() => {
       result.current.setDeckId('BADID');
     });
 
-    act(() => {
+    await act(async () => {
       result.current.loadDeckById();
+      // Allow microtasks to flush
+      await Promise.resolve();
     });
 
-    expect(result.current.deckId).toBe('BADID');
+    // Invalid deckId 'BADID' should be cleared on decode error
+    // (recovery may load a different valid deck, but BADID should not persist)
+    expect(result.current.deckId).not.toBe('BADID');
   });
 
   it('should initialize with empty waste pile', async () => {

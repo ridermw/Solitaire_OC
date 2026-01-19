@@ -37,7 +37,7 @@ self.onmessage = async (event: MessageEvent<WinnableDeckRequest>) => {
 
     if (deckId) {
       console.log('Winnable deck generated', { deckId, attempt });
-      self.postMessage({ deckId: deckId!, drawCount, status: 'attempt-end', attempt, success: true } satisfies WinnableDeckResponse);
+      self.postMessage({ deckId, drawCount, status: 'attempt-end', attempt, success: true } satisfies WinnableDeckResponse);
       break;
     }
 

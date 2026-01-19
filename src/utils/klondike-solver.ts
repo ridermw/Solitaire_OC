@@ -50,11 +50,16 @@ const decodeBase64 = (encoded: string): Uint8Array => {
     }
 
     const sanitized = encoded.replace(/\s+/g, '');
+    if (sanitized.length % 4 !== 0) {
+        throw new Error('Invalid base64 input: length must be a multiple of 4');
+    }
     const bytes: number[] = [];
 
     for (let i = 0; i < sanitized.length; i += 4) {
         const chunk = sanitized.slice(i, i + 4);
-        if (chunk.length < 4) break;
+        if (chunk.length < 4) {
+            throw new Error('Invalid base64 input: found incomplete 4-character chunk');
+        }
 
         const sextets = chunk.split('').map(char => lookup.get(char) ?? 0);
         const padding = chunk.endsWith('==') ? 2 : chunk.endsWith('=') ? 1 : 0;
@@ -445,7 +450,11 @@ class DeckCodec {
 
         for (let i = 0; i < DECK_SIZE; i++) {
             const factorial = this.factorials[DECK_SIZE - 1 - i];
-            const rank = Number(remaining / factorial);
+            const rankBigInt = remaining / factorial;
+            if (rankBigInt < 0n || rankBigInt >= BigInt(available.length)) {
+                throw new Error('Deck code is invalid.');
+            }
+            const rank = Number(rankBigInt);
             remaining = remaining % factorial;
 
             deck[i] = available[rank];

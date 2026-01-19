@@ -121,6 +121,7 @@ export const useSolitaire = () => {
         setNextDeck(null);
         // Use setTimeout to avoid state update during render
         setTimeout(() => {
+          if (!isMountedRef.current) return;
           startGameWithDeckId(recoveryDeckId, count, false);
           queueNextDeck(count);
         }, 0);

@@ -71,17 +71,16 @@ const setDealState = (state: GameState) => {
   dealState = cloneGameState(state);
 };
 
-  const waitForGeneration = async (result: HookResult, condition?: HookCondition) => {
-    await act(async () => {
-      for (let i = 0; i < 40; i += 1) {
-        if (result.current && (!result.current.isGenerating || (condition && condition(result.current)))) {
-          return;
-        }
-        await new Promise(resolve => setTimeout(resolve, 25));
+const waitForGeneration = async (result: HookResult, condition?: HookCondition) => {
+  await act(async () => {
+    for (let i = 0; i < 40; i += 1) {
+      if (result.current && !result.current.isGenerating && (!condition || condition(result.current))) {
+        return;
       }
-    });
-  };
-
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  });
+};
 
 const waitForDeckReady = async (result: HookResult) => {
   await act(async () => {

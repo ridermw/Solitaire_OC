@@ -53,11 +53,13 @@ globalThis.fetch = vi.fn(async () => ({
 })) as unknown as typeof fetch;
 
 class MockWorker {
-  onmessage: ((event: MessageEvent<{ deckId: string | null }>) => void) | null = null;
+  onmessage: ((event: MessageEvent<{ deckId: string | null; drawCount: 1 | 3 }>) => void) | null = null;
+  private lastDrawCount: 1 | 3 = 3;
 
-  postMessage() {
+  postMessage(data: { drawCount: 1 | 3 }) {
+    this.lastDrawCount = data.drawCount;
     setTimeout(() => {
-      this.onmessage?.({ data: { deckId: initialDeckId } } as MessageEvent<{ deckId: string | null }>);
+      this.onmessage?.({ data: { deckId: initialDeckId, drawCount: this.lastDrawCount } } as MessageEvent<{ deckId: string | null; drawCount: 1 | 3 }>);
     }, 0);
   }
 

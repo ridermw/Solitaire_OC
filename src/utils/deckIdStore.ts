@@ -4,5 +4,5 @@ export const getRandomDeckId = (ids: string[]): string | null => {
   }
 
   const index = Math.floor(Math.random() * ids.length);
-  return ids[index] ?? null;
+  return ids[index];
 };

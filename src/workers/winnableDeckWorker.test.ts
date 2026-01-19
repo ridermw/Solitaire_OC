@@ -26,14 +26,15 @@ describe('winnableDeckWorker', () => {
     sendMessage({ drawCount: 1 });
 
     await vi.waitFor(() => {
-      expect(postMessageMock).toHaveBeenCalledWith({ deckId: null, status: 'attempt-start', attempt: 1 });
+      expect(postMessageMock).toHaveBeenCalledWith({ deckId: null, drawCount: 1, status: 'attempt-start', attempt: 1 });
       expect(postMessageMock).toHaveBeenCalledWith({
         deckId: 'DECKID',
+        drawCount: 1,
         status: 'attempt-end',
         attempt: 1,
         success: true,
       });
-      expect(postMessageMock).toHaveBeenCalledWith({ deckId: 'DECKID' });
+      expect(postMessageMock).toHaveBeenCalledWith({ deckId: 'DECKID', drawCount: 1 });
     });
   });
 });

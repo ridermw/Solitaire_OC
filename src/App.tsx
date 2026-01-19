@@ -64,24 +64,24 @@ function App() {
           canUndo={canUndo}
         />
 
-          <GameBoard
-            stockCount={gameState.stock.length}
-            waste={gameState.waste}
-            foundations={gameState.foundations}
-            tableau={gameState.tableau}
-            selectedCardId={selectedCard?.card.id}
-            isDealing={isDealing}
-            isGenerating={isGenerating}
-            onDrawCard={drawCard}
-            onCardClick={handleCardClick}
-            onEmptyTableauClick={handleEmptyTableauClick}
-            onEmptyFoundationClick={(suit) => {
-              if (selectedCard) {
-                handleCardClick(selectedCard.card, `foundation-${suit}`);
-              }
-            }}
-            onDragMove={handleDragMove}
-          />
+        <GameBoard
+          stockCount={gameState.stock.length}
+          waste={gameState.waste}
+          foundations={gameState.foundations}
+          tableau={gameState.tableau}
+          selectedCardId={selectedCard?.card.id}
+          isDealing={isDealing}
+          isGenerating={isGenerating}
+          onDrawCard={drawCard}
+          onCardClick={handleCardClick}
+          onEmptyTableauClick={handleEmptyTableauClick}
+          onEmptyFoundationClick={(suit) => {
+            if (selectedCard) {
+              handleCardClick(selectedCard.card, `foundation-${suit}`);
+            }
+          }}
+          onDragMove={handleDragMove}
+        />
 
       </div>
 

@@ -7,6 +7,7 @@ import { logGameEvent } from '../utils/logger';
 import { playCardFlipSound, playMoveSound, playShuffleSound, playWinSound } from '../utils/audio';
 import { cloneGameState } from '../utils/cloneGameState';
 import type { Card, GameState, Suit } from '../types/game';
+import { isValidDrawCount } from '../types/game';
 
 const INITIAL_GAME_STATE: GameState = {
   stock: [],
@@ -27,9 +28,11 @@ export const useSolitaire = () => {
   const [selectedCard, setSelectedCard] = useState<{ card: Card, source: string, index?: number } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [drawCount, setDrawCount] = useState<1 | 3>(3); // Default to 3
+  const drawCountRef = useRef<1 | 3>(3); // Track current drawCount for async operations
   const [autoMoveEnabled, setAutoMoveEnabled] = useState(true); // Default to Auto Move On
   const [deckId, setDeckId] = useState('');
-  const [nextDeckId, setNextDeckId] = useState<string | null>(null);
+  // Track queued deck with the draw count it was generated for
+  const [nextDeck, setNextDeck] = useState<{ id: string; drawCount: 1 | 3 } | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const isMountedRef = useRef(true);
   
@@ -104,21 +107,41 @@ export const useSolitaire = () => {
       setIsGenerating(false);
       setIsDealing(false);
     } catch (error) {
-      logGameEvent('Deck Load Failed', { deckId: selectedDeckId, error });
+      const message = error instanceof Error ? error.message : String(error);
+      logGameEvent('Deck Load Failed', { deckId: selectedDeckId, message });
+      // Clear the invalid deck ID from input
+      setDeckId('');
       setIsGenerating(false);
       setIsDealing(false);
+      
+      // If we have a next deck ready for this draw count, start a new game to recover
+      // Otherwise the user will need to wait for generation or enter a valid ID
+      if (nextDeck && nextDeck.drawCount === count) {
+        const recoveryDeckId = nextDeck.id;
+        setNextDeck(null);
+        // Use setTimeout to avoid state update during render
+        setTimeout(() => {
+          startGameWithDeckId(recoveryDeckId, count, false);
+          queueNextDeck(count);
+        }, 0);
+      }
     }
   };
 
   const startNewGame = async (overrideDrawCount?: 1 | 3) => {
-    if (!nextDeckId) {
+    const count = isValidDrawCount(overrideDrawCount) ? overrideDrawCount : drawCount;
+
+    // Only use queued deck if it was generated for the current draw count
+    if (!nextDeck || nextDeck.drawCount !== count) {
+      // Invalidate stale deck and request a new one for the correct draw count
+      setNextDeck(null);
+      queueNextDeck(count);
       return;
     }
 
-    const selectedDeckId = nextDeckId;
-    setNextDeckId(null);
+    const selectedDeckId = nextDeck.id;
+    setNextDeck(null);
 
-    const count = overrideDrawCount === 1 || overrideDrawCount === 3 ? overrideDrawCount : drawCount;
     await startGameWithDeckId(selectedDeckId, count, true);
     queueNextDeck(count);
   };
@@ -129,18 +152,26 @@ export const useSolitaire = () => {
     const loadDeckIds = async () => {
       try {
         const response = await fetch(`${import.meta.env.BASE_URL}winnable-decks.json`);
+        if (!isMountedRef.current) return;
+        
         const data = await response.json();
+        if (!isMountedRef.current) return;
+        
         if (Array.isArray(data)) {
           const ids = data.filter((id): id is string => typeof id === 'string');
           const initialId = getRandomDeckId(ids);
           if (initialId) {
-            setNextDeckId(initialId);
-            startGameWithDeckId(initialId, drawCount, false);
-            queueNextDeck(drawCount);
+            // Use ref to get current drawCount (avoids stale closure)
+            const currentDrawCount = drawCountRef.current;
+            setNextDeck({ id: initialId, drawCount: currentDrawCount });
+            startGameWithDeckId(initialId, currentDrawCount, false);
+            queueNextDeck(currentDrawCount);
           }
         }
       } catch (error) {
-        logGameEvent('Deck List Load Failed', { error });
+        if (!isMountedRef.current) return;
+        const message = error instanceof Error ? error.message : String(error);
+        logGameEvent('Deck List Load Failed', { message });
       }
     };
 
@@ -148,6 +179,7 @@ export const useSolitaire = () => {
       const worker = new Worker(new URL('../workers/winnableDeckWorker.ts', import.meta.url), { type: 'module' });
       worker.onmessage = (event: MessageEvent<{
         deckId: string | null;
+        drawCount: 1 | 3;
         status?: 'attempt-start' | 'attempt-end';
         attempt?: number;
         success?: boolean;
@@ -170,7 +202,10 @@ export const useSolitaire = () => {
           return;
         }
 
-        setNextDeckId(event.data.deckId);
+        // Only store the deck if it was successfully generated
+        if (event.data.deckId) {
+          setNextDeck({ id: event.data.deckId, drawCount: event.data.drawCount });
+        }
       };
       workerRef.current = worker;
     };
@@ -188,6 +223,7 @@ export const useSolitaire = () => {
 
   const changeDrawCount = (newCount: 1 | 3) => {
       setDrawCount(newCount);
+      drawCountRef.current = newCount;
       startNewGame(newCount);
   };
 
@@ -196,20 +232,13 @@ export const useSolitaire = () => {
   };
 
   const drawCard = () => {
-    const effectiveDrawCount = drawCount === 1 || drawCount === 3 ? drawCount : 3;
-
     logGameEvent('Draw Clicked', {
       isGenerating,
       isDealing,
       drawCount,
-      effectiveDrawCount,
       stockCount: gameState.stock.length,
       wasteCount: gameState.waste.length,
     });
-
-    if (drawCount !== effectiveDrawCount) {
-      logGameEvent('Draw Count Invalid', { drawCount });
-    }
 
     if (isGenerating) {
       logGameEvent('Draw Blocked', { reason: 'generating' });
@@ -237,10 +266,10 @@ export const useSolitaire = () => {
       return;
     }
 
-    const newStock = gameState.stock.filter(Boolean);
+    const newStock = [...gameState.stock];
     const cardsToDraw: Card[] = [];
 
-    const count = Math.min(effectiveDrawCount, newStock.length);
+    const count = Math.min(drawCount, newStock.length);
     for (let i = 0; i < count; i++) {
       const card = newStock.pop();
       if (!card) {
@@ -255,7 +284,7 @@ export const useSolitaire = () => {
         reason: 'no-cards-drawn',
         stockCount: gameState.stock.length,
         filteredStockCount: newStock.length,
-        drawCount: effectiveDrawCount,
+        drawCount,
       });
       return;
     }
@@ -515,8 +544,6 @@ export const useSolitaire = () => {
     setDeckId,
     loadDeckById,
     startNewGame,
-
-
     changeDrawCount,
     toggleAutoMove,
     drawCard,
@@ -527,6 +554,6 @@ export const useSolitaire = () => {
     undo,
     canUndo: history.length > 0,
     isWon: Object.values(gameState.foundations).every(pile => pile.length === 13),
-    isNextDeckReady: !!nextDeckId,
+    isNextDeckReady: !!nextDeck && nextDeck.drawCount === drawCount,
   };
 };

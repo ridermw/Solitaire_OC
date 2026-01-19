@@ -13,7 +13,13 @@ export const dealNewGame = (): GameState => {
     const baseDeck = createDeck();
     const idToIndex = new Map(baseDeck.map((card, index) => [card.id, index]));
     const deck = shuffleDeck(baseDeck);
-    const deckOrder = deck.map(card => idToIndex.get(card.id) ?? 0);
+    const deckOrder = deck.map(card => {
+      const index = idToIndex.get(card.id);
+      if (index === undefined) {
+        throw new Error(`Card ID not found in base deck: ${card.id}`);
+      }
+      return index;
+    });
 
     return dealGameFromDeckOrder(deckOrder);
 };

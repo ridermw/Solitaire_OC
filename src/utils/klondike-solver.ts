@@ -1,8 +1,11 @@
+import type { DrawCount } from '../types/game';
+
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const DECK_SIZE = 52;
-const DECK_CODE_BYTES = 28;
+// 52! requires ceil(log2(52!)) = 226 bits minimum, so we need 29 bytes (232 bits)
+const DECK_CODE_BYTES = 29;
 
-export type DrawCount = 1 | 3;
+export type { DrawCount };
 
 interface Card {
     index: number;
@@ -14,6 +17,8 @@ interface Card {
 interface GameState {
     foundations: number[][];
     tableau: number[][];
+    // Number of face-up cards in each tableau column (counted from top of pile)
+    faceUpCounts: number[];
     stock: number[];
     waste: number[];
     drawCount: DrawCount;
@@ -85,6 +90,7 @@ class KlondikeSolver {
 
     private createInitialState(deck: number[], drawCount: DrawCount): GameState {
         const tableau: number[][] = [];
+        const faceUpCounts: number[] = [];
         let pos = 0;
 
         for (let col = 0; col < 7; col++) {
@@ -93,6 +99,8 @@ class KlondikeSolver {
                 colCards.push(deck[pos++]);
             }
             tableau.push(colCards);
+            // Initially only the top card of each column is face-up
+            faceUpCounts.push(1);
         }
 
         const stock = deck.slice(pos);
@@ -100,6 +108,7 @@ class KlondikeSolver {
         return {
             foundations: [[], [], [], []],
             tableau,
+            faceUpCounts,
             stock,
             waste: [],
             drawCount,
@@ -112,6 +121,7 @@ class KlondikeSolver {
         const joinNumbers = (values: number[]) => values.join(',');
         parts.push(`f:${state.foundations.map(joinNumbers).join('|')}`);
         parts.push(`t:${state.tableau.map(joinNumbers).join('|')}`);
+        parts.push(`u:${state.faceUpCounts.join(',')}`);
         parts.push(`s:${joinNumbers(state.stock)}`);
         parts.push(`w:${joinNumbers(state.waste)}`);
         parts.push(`d:${state.drawCount}`);
@@ -126,9 +136,22 @@ class KlondikeSolver {
     private getValidMoves(state: GameState): GameState[] {
         const moves: GameState[] = [];
 
+        // Helper to handle flipping a card when face-up cards are removed
+        const flipIfNeeded = (newState: GameState, colIdx: number, cardsRemoved: number) => {
+            const newFaceUp = newState.faceUpCounts[colIdx] - cardsRemoved;
+            if (newFaceUp <= 0 && newState.tableau[colIdx].length > 0) {
+                // All face-up cards removed but there are face-down cards - flip one
+                newState.faceUpCounts[colIdx] = 1;
+            } else {
+                newState.faceUpCounts[colIdx] = Math.max(0, newFaceUp);
+            }
+        };
+
+        // Tableau to foundation (top card only, must be face-up)
         for (let colIdx = 0; colIdx < 7; colIdx++) {
             const col = state.tableau[colIdx];
             if (col.length === 0) continue;
+            if (state.faceUpCounts[colIdx] === 0) continue; // No face-up cards
 
             const topCard = this.toCard(col[col.length - 1]);
             const foundationIdx = topCard.suit;
@@ -139,10 +162,12 @@ class KlondikeSolver {
                 const newState = this.cloneState(state);
                 newState.tableau[colIdx] = col.slice(0, -1);
                 newState.foundations[foundationIdx] = [...foundation, topCard.index];
+                flipIfNeeded(newState, colIdx, 1);
                 moves.push(newState);
             }
         }
 
+        // Waste to foundation
         if (state.waste.length > 0) {
             const topCard = this.toCard(state.waste[state.waste.length - 1]);
             const foundationIdx = topCard.suit;
@@ -157,33 +182,48 @@ class KlondikeSolver {
             }
         }
 
+        // Tableau to tableau (only face-up cards can be moved)
         for (let fromCol = 0; fromCol < 7; fromCol++) {
             const col = state.tableau[fromCol];
             if (col.length === 0) continue;
+            
+            const faceUpCount = state.faceUpCounts[fromCol];
+            if (faceUpCount === 0) continue;
+            
+            // First face-up card index
+            const firstFaceUpIdx = col.length - faceUpCount;
 
-            for (let cardIdx = 0; cardIdx < col.length; cardIdx++) {
+            // Only iterate over face-up cards
+            for (let cardIdx = firstFaceUpIdx; cardIdx < col.length; cardIdx++) {
                 const sequence = col.slice(cardIdx);
                 if (!this.isValidSequence(sequence)) continue;
 
                 const bottomCard = this.toCard(sequence[0]);
+                const cardsToMove = sequence.length;
 
                 for (let toCol = 0; toCol < 7; toCol++) {
                     if (fromCol === toCol) continue;
 
                     const targetCol = state.tableau[toCol];
+                    const targetFaceUp = state.faceUpCounts[toCol];
 
+                    // Can only place on face-up cards or empty column
                     if (targetCol.length === 0 && bottomCard.value === 12) {
                         const newState = this.cloneState(state);
                         newState.tableau[fromCol] = col.slice(0, cardIdx);
-                        newState.tableau[toCol] = [...targetCol, ...sequence];
+                        newState.tableau[toCol] = [...sequence];
+                        newState.faceUpCounts[toCol] = cardsToMove;
+                        flipIfNeeded(newState, fromCol, cardsToMove);
                         moves.push(newState);
-                    } else if (targetCol.length > 0) {
+                    } else if (targetCol.length > 0 && targetFaceUp > 0) {
                         const targetCard = this.toCard(targetCol[targetCol.length - 1]);
                         if (bottomCard.color !== targetCard.color &&
                             bottomCard.value === targetCard.value - 1) {
                             const newState = this.cloneState(state);
                             newState.tableau[fromCol] = col.slice(0, cardIdx);
                             newState.tableau[toCol] = [...targetCol, ...sequence];
+                            newState.faceUpCounts[toCol] = targetFaceUp + cardsToMove;
+                            flipIfNeeded(newState, fromCol, cardsToMove);
                             moves.push(newState);
                         }
                     }
@@ -191,30 +231,35 @@ class KlondikeSolver {
             }
         }
 
+        // Waste to tableau
         if (state.waste.length > 0) {
             const wasteCard = this.toCard(state.waste[state.waste.length - 1]);
 
             for (let toCol = 0; toCol < 7; toCol++) {
                 const targetCol = state.tableau[toCol];
+                const targetFaceUp = state.faceUpCounts[toCol];
 
                 if (targetCol.length === 0 && wasteCard.value === 12) {
                     const newState = this.cloneState(state);
                     newState.waste = state.waste.slice(0, -1);
-                    newState.tableau[toCol] = [...targetCol, wasteCard.index];
+                    newState.tableau[toCol] = [wasteCard.index];
+                    newState.faceUpCounts[toCol] = 1;
                     moves.push(newState);
-                } else if (targetCol.length > 0) {
+                } else if (targetCol.length > 0 && targetFaceUp > 0) {
                     const targetCard = this.toCard(targetCol[targetCol.length - 1]);
                     if (wasteCard.color !== targetCard.color &&
                         wasteCard.value === targetCard.value - 1) {
                         const newState = this.cloneState(state);
                         newState.waste = state.waste.slice(0, -1);
                         newState.tableau[toCol] = [...targetCol, wasteCard.index];
+                        newState.faceUpCounts[toCol] = targetFaceUp + 1;
                         moves.push(newState);
                     }
                 }
             }
         }
 
+        // Draw from stock
         if (state.stock.length > 0) {
             const newState = this.cloneState(state);
 
@@ -230,6 +275,7 @@ class KlondikeSolver {
 
             moves.push(newState);
         } else if (state.waste.length > 0) {
+            // Recycle waste to stock
             const newState = this.cloneState(state);
             newState.stock = [...newState.waste].reverse();
             newState.waste = [];
@@ -257,32 +303,43 @@ class KlondikeSolver {
         return {
             foundations: state.foundations.map(f => [...f]),
             tableau: state.tableau.map(col => [...col]),
+            faceUpCounts: [...state.faceUpCounts],
             stock: [...state.stock],
             waste: [...state.waste],
             drawCount: state.drawCount,
         };
     }
 
-    private solve(state: GameState, depth: number): boolean {
-        if (this.isWon(state)) {
-            return true;
-        }
+    /**
+     * Iterative depth-first search to solve the game.
+     * Uses an explicit stack to avoid call stack overflow with deep recursion.
+     */
+    private solve(initialState: GameState): boolean {
+        // Stack entries: [state, depth]
+        const stack: Array<[GameState, number]> = [[initialState, 0]];
 
-        if (this.visitedStates.size >= this.maxStates || depth >= this.maxDepth) {
-            return false;
-        }
+        while (stack.length > 0) {
+            const [state, depth] = stack.pop()!;
 
-        const hash = this.hashState(state);
-        if (this.visitedStates.has(hash)) {
-            return false;
-        }
-        this.visitedStates.add(hash);
-
-        const moves = this.getValidMoves(state);
-
-        for (const nextState of moves) {
-            if (this.solve(nextState, depth + 1)) {
+            if (this.isWon(state)) {
                 return true;
+            }
+
+            if (this.visitedStates.size >= this.maxStates || depth >= this.maxDepth) {
+                continue;
+            }
+
+            const hash = this.hashState(state);
+            if (this.visitedStates.has(hash)) {
+                continue;
+            }
+            this.visitedStates.add(hash);
+
+            const moves = this.getValidMoves(state);
+
+            // Push moves in reverse order so first move is processed first (LIFO)
+            for (let i = moves.length - 1; i >= 0; i--) {
+                stack.push([moves[i], depth + 1]);
             }
         }
 
@@ -292,21 +349,45 @@ class KlondikeSolver {
     isSolvable(deck: number[], drawCount: DrawCount = 1): boolean {
         this.visitedStates.clear();
         const initialState = this.createInitialState(deck, drawCount);
-        return this.solve(initialState, 0);
+        return this.solve(initialState);
+    }
+}
+
+class SeedableRng {
+    private state: number;
+
+    constructor(seed: number = Date.now() >>> 0) {
+        // Ensure non-zero 32-bit state
+        this.state = seed >>> 0 || 1;
+    }
+
+    /**
+     * Returns a floating-point number in [0, 1).
+     * Uses xorshift32, a simple, well-known PRNG algorithm.
+     */
+    next(): number {
+        let x = this.state;
+        x ^= x << 13;
+        x ^= x >>> 17;
+        x ^= x << 5;
+        this.state = x >>> 0;
+        return this.state / 0x100000000;
     }
 }
 
 class WinnableDeckGenerator {
     private solver: KlondikeSolver;
+    private rng: SeedableRng;
 
-    constructor(options: KlondikeSolverOptions = {}) {
+    constructor(options: KlondikeSolverOptions = {}, seed?: number) {
         this.solver = new KlondikeSolver(options);
+        this.rng = new SeedableRng(seed);
     }
 
     private shuffleDeck(): number[] {
         const deck = Array.from({ length: DECK_SIZE }, (_, i) => i);
         for (let i = deck.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
+            const j = Math.floor(this.rng.next() * (i + 1));
             [deck[i], deck[j]] = [deck[j], deck[i]];
         }
         return deck;
@@ -344,18 +425,14 @@ class DeckCodec {
     }
 
     private static permutationToIndex(deck: number[]): bigint {
+        const available = Array.from({ length: DECK_SIZE }, (_, i) => i);
         let index = 0n;
-        let factorial = 1n;
-        const used = new Array(DECK_SIZE).fill(false);
 
-        for (let i = DECK_SIZE - 1; i >= 0; i--) {
-            let rank = 0;
-            for (let j = 0; j < deck[i]; j++) {
-                if (!used[j]) rank++;
-            }
-            used[deck[i]] = true;
-            index += factorial * BigInt(rank);
-            factorial *= BigInt(DECK_SIZE - i);
+        for (let i = 0; i < DECK_SIZE; i++) {
+            const value = deck[i];
+            const rank = available.indexOf(value);
+            index += BigInt(rank) * this.factorials[DECK_SIZE - 1 - i];
+            available.splice(rank, 1);
         }
 
         return index;
@@ -363,25 +440,16 @@ class DeckCodec {
 
     private static indexToPermutation(index: bigint): number[] {
         const deck = new Array(DECK_SIZE);
-        const used = new Array(DECK_SIZE).fill(false);
+        const available = Array.from({ length: DECK_SIZE }, (_, i) => i);
         let remaining = index;
 
-        for (let i = DECK_SIZE - 1; i >= 0; i--) {
-            const factorial = this.factorials[DECK_SIZE - i - 1];
+        for (let i = 0; i < DECK_SIZE; i++) {
+            const factorial = this.factorials[DECK_SIZE - 1 - i];
             const rank = Number(remaining / factorial);
-            remaining %= factorial;
+            remaining = remaining % factorial;
 
-            let count = 0;
-            for (let j = 0; j < DECK_SIZE; j++) {
-                if (!used[j]) {
-                    if (count === rank) {
-                        deck[i] = j;
-                        used[j] = true;
-                        break;
-                    }
-                    count++;
-                }
-            }
+            deck[i] = available[rank];
+            available.splice(rank, 1);
         }
 
         return deck;

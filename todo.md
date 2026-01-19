@@ -1,5 +1,13 @@
 # Repository Review TODOs
 
+## Bugs (from PR #1 review)
+
+- [x] Fix: Error state leaves game unplayable after `loadDeckById` fails (`src/hooks/useSolitaire.ts:106-110`). When `startGameWithDeckId` catches an error, game state is empty with no recovery. Fix: restore previous state, show error message, or auto-trigger new game.
+- [x] Fix: Web worker infinite loop if `generateWinnableDeckOrder` always returns null (`src/workers/winnableDeckWorker.ts:23-39`). The `while (!deckId)` loop runs forever if solver fails. Fix: add max attempt limit (e.g., 10 outer attempts) or timeout.
+- [x] Fix: Race condition in initial deck loading (`src/hooks/useSolitaire.ts:137-139`). `drawCount` captured at mount; changing before initial load uses stale value. Fix: use ref or re-read current state.
+- [x] Fix: `deckId` state not cleared on decode error (`src/hooks/useSolitaire.ts:100, 106-110`). Invalid deck ID remains in input after failure. Fix: clear or revert `deckId` on error.
+- [x] Fix: Indentation inconsistency in `App.tsx` (`src/App.tsx:62-80`). `<GameBoard>` has extra leading spaces vs other JSX.
+
 ## Gameplay and Interaction
 
 - [ ] Ensure dragged cards render above tableau stacks (z-index/portal). Why: dragged card currently appears behind stacked cards.
@@ -7,8 +15,8 @@
 - [ ] Allow dragging cards from foundations back to tableau (no automove from foundation). Why: enables correcting moves without auto-return.
 - [ ] Auto-move chain to foundations when a card lands there and reveals a new valid move. Why: speeds up endgame cleanup.
 - [ ] Make win confetti cover the full screen. Why: currently only renders in the bottom-right area.
-- [ ] Add deck ID generation and UI field (base-62, 8x5-char groups with hyphens; 38 chars data + 2 checksum) tied to New Game and Load Deck. Why: enable replayable shuffles via reference id.
-- [ ] Gate New Game behind async winnable-deck generation (precompute next winnable deck while playing). Why: ensure only solvable games are served without blocking UI.
+- [x] Add deck ID generation and UI field (base-62, 8x5-char groups with hyphens; 38 chars data + 2 checksum) tied to New Game and Load Deck. Why: enable replayable shuffles via reference id.
+- [x] Gate New Game behind async winnable-deck generation (precompute next winnable deck while playing). Why: ensure only solvable games are served without blocking UI.
 
 ## Architecture and Code Quality
 
@@ -18,8 +26,8 @@
 - [x] Make deck/card updates immutable in `src/utils/gameLogic.ts` (avoid mutating `card.isFaceUp`). Why: mutation can cause subtle bugs when references are reused.
 - [ ] Add typed game event definitions in `src/utils/logger.ts` and gate debug logs. Why: removes `any`, improves maintainability, reduces console noise.
 - [ ] Defer audio initialization until a user gesture or add an explicit sound enable control in `src/utils/audio.ts`. Why: browsers often block AudioContext without user interaction.
-- [ ] Consider moving `isGameWinnable` work to a Web Worker or adding progress UI. Why: heavy solver loops can block the UI thread.
-- [ ] Ensure solver calls only run in a worker process. Why: solver operations can be slow and should not block the UI thread.
+- [x] Consider moving `isGameWinnable` work to a Web Worker or adding progress UI. Why: heavy solver loops can block the UI thread.
+- [x] Ensure solver calls only run in a worker process. Why: solver operations can be slow and should not block the UI thread.
 
 ## UX and Accessibility
 

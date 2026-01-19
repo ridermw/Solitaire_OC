@@ -12,6 +12,9 @@ export const isDeckWinnable = (
     maxDepth = 300
 ): boolean => {
     if (deckOrder.length !== 52) {
+        console.error(
+            `isDeckWinnable received invalid deck length: expected 52 cards, got ${deckOrder.length}.`
+        );
         return false;
     }
 

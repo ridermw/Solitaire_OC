@@ -14,6 +14,9 @@ function App() {
     isDealing,
     drawCount,
     autoMoveEnabled,
+    deckId,
+    setDeckId,
+    loadDeckById,
     startNewGame,
     changeDrawCount,
     toggleAutoMove,
@@ -25,6 +28,7 @@ function App() {
     undo,
     canUndo,
     isWon,
+    isNextDeckReady,
   } = useSolitaire();
 
   const [showDrawChangeModal, setShowDrawChangeModal] = useState<1 | 3 | null>(null);
@@ -50,6 +54,10 @@ function App() {
           toggleAutoMove={toggleAutoMove}
           drawCount={drawCount}
           isGenerating={isGenerating}
+          isNextDeckReady={isNextDeckReady}
+          deckId={deckId}
+          onDeckIdChange={setDeckId}
+          onLoadDeck={loadDeckById}
           onDrawCountChange={handleDrawChangeRequest}
           startNewGame={startNewGame}
           undo={undo}
@@ -63,6 +71,7 @@ function App() {
           tableau={gameState.tableau}
           selectedCardId={selectedCard?.card.id}
           isDealing={isDealing}
+          isGenerating={isGenerating}
           onDrawCard={drawCard}
           onCardClick={handleCardClick}
           onEmptyTableauClick={handleEmptyTableauClick}
@@ -73,6 +82,7 @@ function App() {
           }}
           onDragMove={handleDragMove}
         />
+
       </div>
 
       <div className="fixed bottom-4 right-4 text-xs text-green-200 opacity-70 text-right">

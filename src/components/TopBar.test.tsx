@@ -8,6 +8,8 @@ describe('TopBar', () => {
     const onDrawCountChange = vi.fn();
     const startNewGame = vi.fn();
     const undo = vi.fn();
+    const onLoadDeck = vi.fn();
+    const onDeckIdChange = vi.fn();
 
     render(
       <TopBar
@@ -15,6 +17,10 @@ describe('TopBar', () => {
         toggleAutoMove={toggleAutoMove}
         drawCount={3}
         isGenerating={false}
+        isNextDeckReady={true}
+        deckId="TESTCODE"
+        onDeckIdChange={onDeckIdChange}
+        onLoadDeck={onLoadDeck}
         onDrawCountChange={onDrawCountChange}
         startNewGame={startNewGame}
         undo={undo}
@@ -33,15 +39,28 @@ describe('TopBar', () => {
 
     fireEvent.click(screen.getByText('Undo'));
     expect(undo).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText('Deck:'), { target: { value: 'ABC' } });
+    expect(onDeckIdChange).toHaveBeenCalledWith('ABC');
+
+    fireEvent.click(screen.getByText('Load Deck'));
+    expect(onLoadDeck).toHaveBeenCalledTimes(1);
   });
 
   it('disables controls while generating', () => {
+    const onDeckIdChange = vi.fn();
+    const onLoadDeck = vi.fn();
+
     render(
       <TopBar
         autoMoveEnabled={false}
         toggleAutoMove={vi.fn()}
         drawCount={1}
         isGenerating={true}
+        isNextDeckReady={false}
+        deckId=""
+        onDeckIdChange={onDeckIdChange}
+        onLoadDeck={onLoadDeck}
         onDrawCountChange={vi.fn()}
         startNewGame={vi.fn()}
         undo={vi.fn()}
@@ -50,6 +69,8 @@ describe('TopBar', () => {
     );
 
     expect(screen.getByLabelText('Draw:')).toBeDisabled();
+    expect(screen.getByLabelText('Deck:')).toBeDisabled();
+    expect(screen.getByText('Load Deck')).toBeDisabled();
     expect(screen.getByText('Dealing...')).toBeDisabled();
     expect(screen.getByText('Undo')).toBeDisabled();
   });

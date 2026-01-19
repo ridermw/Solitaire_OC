@@ -10,22 +10,40 @@ const INITIAL_GAME_STATE: GameState = {
 };
 
 export const dealNewGame = (): GameState => {
-    const deck = shuffleDeck(createDeck());
+    const baseDeck = createDeck();
+    const idToIndex = new Map(baseDeck.map((card, index) => [card.id, index]));
+    const deck = shuffleDeck(baseDeck);
+    const deckOrder = deck.map(card => {
+      const index = idToIndex.get(card.id);
+      if (index === undefined) {
+        throw new Error(`Card ID not found in base deck: ${card.id}`);
+      }
+      return index;
+    });
+
+    return dealGameFromDeckOrder(deckOrder);
+};
+
+export const dealGameFromDeckOrder = (deckOrder: number[]): GameState => {
+    const baseDeck = createDeck();
+    const orderedDeck = deckOrder.map(index => ({ ...baseDeck[index] }));
     const tableau: Card[][] = [[], [], [], [], [], [], []];
     let cardIndex = 0;
+
     for (let i = 0; i < 7; i++) {
       for (let j = 0; j <= i; j++) {
-        const card = deck[cardIndex++];
+        const card = orderedDeck[cardIndex++];
         tableau[i].push({
           ...card,
           isFaceUp: j === i,
         });
       }
     }
+
     return {
         ...INITIAL_GAME_STATE,
-        foundations: { hearts: [], diamonds: [], clubs: [], spades: [] }, // Explicitly reset foundations
-        stock: deck.slice(cardIndex),
+        foundations: { hearts: [], diamonds: [], clubs: [], spades: [] },
+        stock: orderedDeck.slice(cardIndex).map(card => ({ ...card, isFaceUp: false })),
         tableau,
     };
 };

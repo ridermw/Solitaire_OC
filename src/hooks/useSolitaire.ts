@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getRankValue, isOppositeColor } from '../utils/cardUtils';
-import { dealNewGame } from '../utils/gameLogic';
-import { isGameWinnable } from '../utils/solver';
+import { dealGameFromDeckOrder } from '../utils/gameLogic';
+import { getRandomDeckId } from '../utils/deckIdStore';
+import { decodeDeckId } from '../utils/solver';
 import { logGameEvent } from '../utils/logger';
 import { playCardFlipSound, playMoveSound, playShuffleSound, playWinSound } from '../utils/audio';
 import { cloneGameState } from '../utils/cloneGameState';
 import type { Card, GameState, Suit } from '../types/game';
+import { isValidDrawCount } from '../types/game';
 
 const INITIAL_GAME_STATE: GameState = {
   stock: [],
@@ -26,7 +28,13 @@ export const useSolitaire = () => {
   const [selectedCard, setSelectedCard] = useState<{ card: Card, source: string, index?: number } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [drawCount, setDrawCount] = useState<1 | 3>(3); // Default to 3
+  const drawCountRef = useRef<1 | 3>(3); // Track current drawCount for async operations
   const [autoMoveEnabled, setAutoMoveEnabled] = useState(true); // Default to Auto Move On
+  const [deckId, setDeckId] = useState('');
+  // Track queued deck with the draw count it was generated for
+  const [nextDeck, setNextDeck] = useState<{ id: string; drawCount: 1 | 3 } | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const isMountedRef = useRef(true);
   
   // Animation state for dealing
   const [isDealing, setIsDealing] = useState(false);
@@ -52,94 +60,171 @@ export const useSolitaire = () => {
       logGameEvent('Undo Performed');
   };
 
-  const startNewGame = async (overrideDrawCount?: 1 | 3) => {
-    // Reset state to empty before generating to ensure clean animation start
-    // Increment game key to force fresh mount of game board components
-    setGameKey(prev => prev + 1);
-    
-    // Clear history on new game
+  const queueNextDeck = (count: 1 | 3) => {
+    if (workerRef.current) {
+      workerRef.current.postMessage({ drawCount: count });
+    }
+  };
+
+  const startGameWithDeckId = async (
+    selectedDeckId: string,
+    count: 1 | 3,
+    bumpKey: boolean
+  ) => {
+    if (bumpKey) {
+      setGameKey(prev => prev + 1);
+    }
+
+    setIsGenerating(true);
+    setIsDealing(true);
+
     setHistory([]);
-    
-    // Create a completely fresh empty state object
     setGameState({
-        stock: [], 
-        waste: [], 
-        foundations: { 
-            hearts: [], 
-            diamonds: [], 
-            clubs: [], 
-            spades: [] 
-        }, 
+        stock: [],
+        waste: [],
+        foundations: {
+            hearts: [],
+            diamonds: [],
+            clubs: [],
+            spades: []
+        },
         tableau: [[],[],[],[],[],[],[]],
         score: 0
     });
-    
-    // Clear selection immediately to prevent ghost selections
     setSelectedCard(null);
 
-    // Force a small delay to ensure React commits the empty state to the DOM
-    // before we start the heavy generation process.
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    setIsGenerating(true);
-    logGameEvent('Searching for Winnable Game', { attemptBatchSize: 10 });
-    setIsDealing(true); // Start deal animation flag
+    logGameEvent('Starting Winnable Game', { drawCount: count, deckId: selectedDeckId });
     playShuffleSound();
-    const count = overrideDrawCount ?? drawCount;
 
-    const searchForWinnableGame = () => {
-        const BATCH_SIZE = 10;
-        let foundGame: GameState | null = null;
-        
-        // Try a batch of deals
-        for (let i = 0; i < BATCH_SIZE; i++) {
-            const candidate = dealNewGame();
-            if (isGameWinnable(candidate, count)) {
-                foundGame = candidate;
-                break;
-            }
-        }
+    try {
+      const deckOrder = decodeDeckId(selectedDeckId);
+      const foundGame = dealGameFromDeckOrder(deckOrder);
 
-        if (foundGame) {
-            logGameEvent('Game Generated', { score: foundGame.score });
-            setGameState(foundGame);
-            setSelectedCard(null);
-            setIsGenerating(false);
-            
-            // End dealing animation after a short delay (simulating card distribution visual time)
-            // In a real physics animation we would wait for callbacks, but here we just use state for now
-            setTimeout(() => setIsDealing(false), 1000); 
-        } else {
-            // Keep looking in next tick
-            setTimeout(searchForWinnableGame, 0);
-        }
-    };
+      setDeckId(selectedDeckId);
+      logGameEvent('Game Generated', { score: foundGame.score, deckId: selectedDeckId });
+      setGameState(foundGame);
+      setSelectedCard(null);
+      setIsGenerating(false);
+      setIsDealing(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logGameEvent('Deck Load Failed', { deckId: selectedDeckId, message });
+      // Clear the invalid deck ID from input
+      setDeckId('');
+      setIsGenerating(false);
+      setIsDealing(false);
+      
+      // If we have a next deck ready for this draw count, start a new game to recover
+      // Otherwise the user will need to wait for generation or enter a valid ID
+      if (nextDeck && nextDeck.drawCount === count) {
+        const recoveryDeckId = nextDeck.id;
+        setNextDeck(null);
+        // Use setTimeout to avoid state update during render
+        setTimeout(() => {
+          if (!isMountedRef.current) return;
+          startGameWithDeckId(recoveryDeckId, count, false);
+          queueNextDeck(count);
+        }, 0);
+      }
+    }
+  };
 
-    // Start search after initial UI clear delay
-    setTimeout(searchForWinnableGame, 100);
+  const startNewGame = async (overrideDrawCount?: 1 | 3) => {
+    const count = isValidDrawCount(overrideDrawCount) ? overrideDrawCount : drawCount;
+
+    // Only use queued deck if it was generated for the current draw count
+    if (!nextDeck || nextDeck.drawCount !== count) {
+      // Invalidate stale deck and request a new one for the correct draw count
+      setNextDeck(null);
+      queueNextDeck(count);
+      return;
+    }
+
+    const selectedDeckId = nextDeck.id;
+    setNextDeck(null);
+
+    await startGameWithDeckId(selectedDeckId, count, true);
+    queueNextDeck(count);
   };
 
   useEffect(() => {
-    // Initial deal
-    let mounted = true;
-    
-    // We wrap in a small timeout to ensure it runs after mount without blocking
-    // and to avoid the "synchronous setState in effect" lint error pattern if the linter is strict,
-    // although startNewGame is async/has timeouts internally.
-    // Actually, simply calling a function that calls setState is fine if it's async or in timeout.
-    // The linter is flagging `startNewGame()` because it *might* be synchronous.
-    // Let's use a flag to be safe.
-    
-    if (mounted) {
-        startNewGame();
-    }
-    
-    return () => { mounted = false; };
+    isMountedRef.current = true;
+
+    const loadDeckIds = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.BASE_URL}winnable-decks.json`);
+        if (!isMountedRef.current) return;
+        
+        const data = await response.json();
+        if (!isMountedRef.current) return;
+        
+        if (Array.isArray(data)) {
+          const ids = data.filter((id): id is string => typeof id === 'string');
+          const initialId = getRandomDeckId(ids);
+          if (initialId) {
+            // Use ref to get current drawCount (avoids stale closure)
+            const currentDrawCount = drawCountRef.current;
+            setNextDeck({ id: initialId, drawCount: currentDrawCount });
+            startGameWithDeckId(initialId, currentDrawCount, false);
+            queueNextDeck(currentDrawCount);
+          }
+        }
+      } catch (error) {
+        if (!isMountedRef.current) return;
+        const message = error instanceof Error ? error.message : String(error);
+        logGameEvent('Deck List Load Failed', { message });
+      }
+    };
+
+    const startWorker = () => {
+      const worker = new Worker(new URL('../workers/winnableDeckWorker.ts', import.meta.url), { type: 'module' });
+      worker.onmessage = (event: MessageEvent<{
+        deckId: string | null;
+        drawCount: 1 | 3;
+        status?: 'attempt-start' | 'attempt-end';
+        attempt?: number;
+        success?: boolean;
+      }>) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        if (event.data.status === 'attempt-start') {
+          console.log('Winnable deck attempt started', { attempt: event.data.attempt });
+          return;
+        }
+
+        if (event.data.status === 'attempt-end') {
+          console.log('Winnable deck attempt finished', {
+            attempt: event.data.attempt,
+            success: event.data.success,
+            deckId: event.data.deckId,
+          });
+          return;
+        }
+
+        // Only store the deck if it was successfully generated
+        if (event.data.deckId) {
+          setNextDeck({ id: event.data.deckId, drawCount: event.data.drawCount });
+        }
+      };
+      workerRef.current = worker;
+    };
+
+    loadDeckIds();
+    startWorker();
+
+    return () => {
+      isMountedRef.current = false;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only on mount
+  }, []);
 
   const changeDrawCount = (newCount: 1 | 3) => {
       setDrawCount(newCount);
+      drawCountRef.current = newCount;
       startNewGame(newCount);
   };
 
@@ -148,6 +233,24 @@ export const useSolitaire = () => {
   };
 
   const drawCard = () => {
+    logGameEvent('Draw Clicked', {
+      isGenerating,
+      isDealing,
+      drawCount,
+      stockCount: gameState.stock.length,
+      wasteCount: gameState.waste.length,
+    });
+
+    if (isGenerating) {
+      logGameEvent('Draw Blocked', { reason: 'generating' });
+      return;
+    }
+
+    if (gameState.stock.length === 0 && gameState.waste.length === 0) {
+      logGameEvent('Draw Blocked', { reason: 'empty' });
+      return;
+    }
+
     pushToHistory(gameState);
 
     if (gameState.stock.length === 0) {
@@ -160,27 +263,50 @@ export const useSolitaire = () => {
         waste: [],
       }));
       playCardFlipSound();
-    } else {
-      const newStock = [...gameState.stock];
-      const cardsToDraw: Card[] = [];
-       
-      const count = Math.min(drawCount, newStock.length);
-      for (let i = 0; i < count; i++) {
-           const card = newStock.pop()!;
-           card.isFaceUp = true;
-           cardsToDraw.push(card);
-      }
-      
-      logGameEvent('Cards Drawn', { count: cardsToDraw.length, cards: cardsToDraw });
-
-      setGameState(prev => ({
-        ...prev,
-        stock: newStock,
-        waste: [...prev.waste, ...cardsToDraw],
-      }));
-      playCardFlipSound();
+      setSelectedCard(null);
+      return;
     }
+
+    const newStock = [...gameState.stock];
+    const cardsToDraw: Card[] = [];
+
+    const count = Math.min(drawCount, newStock.length);
+    for (let i = 0; i < count; i++) {
+      const card = newStock.pop();
+      if (!card) {
+        break;
+      }
+      card.isFaceUp = true;
+      cardsToDraw.push(card);
+    }
+
+    if (cardsToDraw.length === 0) {
+      logGameEvent('Draw Blocked', {
+        reason: 'no-cards-drawn',
+        stockCount: gameState.stock.length,
+        filteredStockCount: newStock.length,
+        drawCount,
+      });
+      return;
+    }
+
+    logGameEvent('Cards Drawn', { count: cardsToDraw.length, cards: cardsToDraw });
+
+    setGameState(prev => ({
+      ...prev,
+      stock: newStock,
+      waste: [...prev.waste, ...cardsToDraw],
+    }));
+    playCardFlipSound();
     setSelectedCard(null);
+  };
+
+  const loadDeckById = () => {
+    if (!deckId) {
+      return;
+    }
+
+    startGameWithDeckId(deckId, drawCount, true);
   };
 
   const handleCardClick = (card: Card, source: string, index?: number) => {
@@ -196,9 +322,9 @@ export const useSolitaire = () => {
       ? index === gameState.tableau[parseInt(source.split('-')[1])].length - 1
       : true;
 
-    if (autoMoveEnabled && isTopTableauCard) {
+    if (autoMoveEnabled) {
          // Try to find a valid move immediately
-         if (attemptAutoMove({ card, source, index })) {
+         if (attemptAutoMove({ card, source, index }, isTopTableauCard)) {
              setSelectedCard(null); // Clear selection if moved
              return;
          }
@@ -223,21 +349,53 @@ export const useSolitaire = () => {
     }
   };
 
-  const attemptAutoMove = (from: { card: Card, source: string, index?: number }): boolean => {
+  const attemptAutoMove = (
+    from: { card: Card, source: string, index?: number },
+    isTopTableauCard: boolean
+  ): boolean => {
+      const isTableauSource = from.source.startsWith('tableau');
+      const tableauIndex = isTableauSource ? parseInt(from.source.split('-')[1]) : null;
+      const tableauCards = isTableauSource && tableauIndex !== null
+        ? gameState.tableau[tableauIndex].slice(from.index ?? 0)
+        : [from.card];
+      const hasFaceDownCard = tableauCards.some(card => !card.isFaceUp);
+
+      const isValidRun = () => {
+        if (tableauCards.length <= 1) {
+          return true;
+        }
+
+        for (let i = 0; i < tableauCards.length - 1; i += 1) {
+          const current = tableauCards[i];
+          const next = tableauCards[i + 1];
+          if (!isOppositeColor(current, next)) return false;
+          if (getRankValue(current.rank) !== getRankValue(next.rank) + 1) return false;
+        }
+
+        return true;
+      };
+
       // Priority 1: Move to Foundation
-      const suit = from.card.suit;
-      const foundationPile = gameState.foundations[suit];
-      const targetRankVal = foundationPile.length > 0 ? getRankValue(foundationPile[foundationPile.length - 1].rank) : 0;
-      
-      if (getRankValue(from.card.rank) === targetRankVal + 1) {
+      if (!isTableauSource || isTopTableauCard) {
+        const suit = from.card.suit;
+        const foundationPile = gameState.foundations[suit];
+        const targetRankVal = foundationPile.length > 0 ? getRankValue(foundationPile[foundationPile.length - 1].rank) : 0;
+
+        if (getRankValue(from.card.rank) === targetRankVal + 1) {
           logGameEvent('Auto Move Success (Foundation)', { card: from.card, target: `foundation-${suit}` });
           executeMove(from, { source: `foundation-${suit}` });
           return true;
+        }
       }
 
       // Priority 2: Move to Tableau
+      if (hasFaceDownCard || !isValidRun()) {
+        logGameEvent('Auto Move Failed', { card: from.card });
+        return false;
+      }
+
       const isKing = from.card.rank === 'K';
-      
+
       for (let i = 0; i < 7; i++) {
           const pile = gameState.tableau[i];
           if (pile.length === 0) {
@@ -256,7 +414,7 @@ export const useSolitaire = () => {
               }
           }
       }
-      
+
       logGameEvent('Auto Move Failed', { card: from.card });
       return false;
   };
@@ -383,6 +541,9 @@ export const useSolitaire = () => {
     isDealing,
     drawCount,
     autoMoveEnabled,
+    deckId,
+    setDeckId,
+    loadDeckById,
     startNewGame,
     changeDrawCount,
     toggleAutoMove,
@@ -393,6 +554,7 @@ export const useSolitaire = () => {
     gameKey,
     undo,
     canUndo: history.length > 0,
-    isWon: Object.values(gameState.foundations).every(pile => pile.length === 13)
+    isWon: Object.values(gameState.foundations).every(pile => pile.length === 13),
+    isNextDeckReady: !!nextDeck && nextDeck.drawCount === drawCount,
   };
 };

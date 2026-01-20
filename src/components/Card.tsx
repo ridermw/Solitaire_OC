@@ -8,6 +8,7 @@ interface CardProps {
   onClick?: () => void;
   className?: string;
   isSelected?: boolean;
+  onDragStart?: (card: CardType) => void;
   onDragEnd?: (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, card: CardType) => void;
 }
 
@@ -90,7 +91,7 @@ const getPips = (rank: string, suit: string) => {
     );
 };
 
-export const Card: React.FC<CardProps> = ({ card, onClick, className = '', isSelected = false, onDragEnd }) => {
+export const Card: React.FC<CardProps> = ({ card, onClick, className = '', isSelected = false, onDragStart, onDragEnd }) => {
   const isFaceUp = card.isFaceUp;
   const color = getCardColor(card.suit);
   const colorClass = color === 'red' ? 'text-red-600' : 'text-black';
@@ -133,6 +134,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, className = '', isSel
       className="relative"
       drag={isDraggable}
       dragSnapToOrigin={true} // Always snap back if not handled
+      onDragStart={() => onDragStart?.(card)}
       onDragEnd={(e, info) => onDragEnd && onDragEnd(e, info, card)}
       dragControls={controls}
       dragElastic={0.1}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card as CardComponent } from './Card';
 import type { Card } from '../types/game';
@@ -18,7 +19,10 @@ export const Tableau = ({
   onCardClick,
   onCardDragEnd,
   onEmptyClick,
-}: TableauProps) => (
+}: TableauProps) => {
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+
+  return (
   <div className="flex justify-between gap-2 md:gap-4 mt-12">
     {piles.map((pile, pileIndex) => (
       <div
@@ -40,7 +44,7 @@ export const Tableau = ({
             <motion.div
               key={card.id}
               className="absolute"
-              style={{ zIndex: cardIndex }}
+              style={{ zIndex: draggingCardId === card.id ? 1000 : cardIndex }}
               initial={
                 isDealing
                   ? {
@@ -67,9 +71,11 @@ export const Tableau = ({
               <CardComponent
                 card={card}
                 onClick={() => onCardClick(card, pileIndex, cardIndex)}
+                onDragStart={card.isFaceUp ? () => setDraggingCardId(card.id) : undefined}
                 onDragEnd={
                   card.isFaceUp
                     ? (_event, info, draggedCard) => {
+                        setDraggingCardId(null);
                         onCardDragEnd(draggedCard, pileIndex, cardIndex, {
                           x: info.point.x,
                           y: info.point.y,
@@ -85,4 +91,5 @@ export const Tableau = ({
       </div>
     ))}
   </div>
-);
+  );
+};

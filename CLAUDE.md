@@ -65,3 +65,15 @@ type DrawCount = 1 | 3;
 - **State immutability**: Use spread syntax or `structuredClone` when mutating game state.
 - **Files**: PascalCase for components, camelCase for hooks/utils.
 - **Commits**: Conventional Commits format (e.g., `feat:`, `fix:`).
+
+## Git Workflow
+
+- Always create a feature branch before making changes: `git checkout -b <branch-name>`
+- Branch naming: `feat/description`, `fix/description`, `refactor/description`
+- Never commit directly to `main`
+
+## Test-Driven Development
+
+- Write unit tests for all changes
+- When fixing bugs, write a failing test first that reproduces the issue, then fix the code to make it pass
+- Run `npm test` before committing to ensure no regressions
